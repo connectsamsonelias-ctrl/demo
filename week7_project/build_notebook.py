@@ -543,6 +543,26 @@ print()
 print(classification_report(y_test, predictions[best_model_name][0], target_names=["No", "Yes"]))
 """)
 
+md("""### Choosing the final model: ROC-AUC isn't the whole story
+
+Ranking purely by ROC-AUC/accuracy would pick **Random Forest** — but it only catches
+**~30% of employees who actually leave** (recall = 0.298). **Logistic Regression** has
+slightly lower ROC-AUC, but catches **~60%** of actual leavers and has the best F1-score
+of all four models.
+
+For this business problem — helping HR *proactively identify and retain* at-risk
+employees — missing 70% of real attrition cases is a far worse practical outcome than a
+few extra false alarms. A false alarm just means HR checks in with someone who was fine;
+a missed case means losing an employee with no warning at all.
+
+**Decision: we select Logistic Regression as the final model**, prioritizing recall/F1 for
+the minority class over raw accuracy or ROC-AUC. This choice is saved as `model.pkl`.""")
+
+code("""final_model_name = "Logistic Regression"
+final_model = trained_models[final_model_name]
+print("Final model selected:", final_model_name)
+""")
+
 md("""---
 ### Phase 4 Summary
 
@@ -552,9 +572,183 @@ md("""---
   (recall) matters more to the business than raw accuracy.
 - Confusion matrices show each model's exact trade-off between false alarms and missed
   at-risk employees.
-- The top-ranked model by ROC-AUC will be carried forward as our final model.
+- **Final model: Logistic Regression**, chosen for its superior recall (0.596) and
+  F1-score (0.459) on the minority "Attrition = Yes" class, despite Random Forest's higher
+  ROC-AUC and accuracy — because catching at-risk employees matters more than headline
+  accuracy for this business problem.
 
 Next: **Phase 5 — Feature Importance & Reporting.**
+""")
+
+# ============================================================
+# PHASE 5: FEATURE IMPORTANCE & REPORTING
+# ============================================================
+md("""## Phase 5: Feature Importance & Reporting
+
+Now we answer the project's final question: **which features actually drive attrition?**
+For Logistic Regression, each feature has a **coefficient** — a number showing how much
+that feature pushes the prediction toward "Yes" (positive) or "No" (negative), once all
+other features are accounted for. Because we scaled all features to the same range in
+Phase 2, coefficients are directly comparable to each other.
+
+We'll also cross-check against Random Forest's feature importances — a different model
+family — to see whether both approaches agree on the key drivers, which gives us more
+confidence in the findings.""")
+
+code("""coefficients = pd.Series(final_model.coef_[0], index=X_train.columns)
+top_features = coefficients.reindex(coefficients.abs().sort_values(ascending=False).index).head(15)
+
+plt.figure(figsize=(9, 7))
+sorted_features = top_features.sort_values()
+bar_colors = ["#e15759" if v > 0 else "#4e79a7" for v in sorted_features.values]
+sorted_features.plot(kind="barh", color=bar_colors)
+plt.title("Top 15 Features Driving Attrition (Logistic Regression Coefficients)")
+plt.xlabel("Coefficient (positive = increases attrition risk, negative = decreases it)")
+plt.tight_layout()
+plt.savefig("feature_importance_logreg.png", dpi=120)
+plt.show()
+""")
+
+md("""**Reading this chart:** red bars (positive coefficients) push toward attrition = Yes;
+blue bars (negative coefficients) push toward staying. The longer the bar, the stronger
+that feature's influence, holding all other features constant.""")
+
+code("""# Cross-check with Random Forest's feature importances (a tree-based, non-linear view)
+rf_model = trained_models["Random Forest"]
+rf_importances = pd.Series(rf_model.feature_importances_, index=X_train.columns)
+top_rf = rf_importances.sort_values(ascending=False).head(15)
+
+plt.figure(figsize=(9, 7))
+top_rf.sort_values().plot(kind="barh", color="#59a14f")
+plt.title("Top 15 Features by Random Forest Importance")
+plt.xlabel("Importance")
+plt.tight_layout()
+plt.savefig("feature_importance_rf.png", dpi=120)
+plt.show()
+""")
+
+code("""print("Top 10 features - Logistic Regression (by |coefficient|):")
+print(top_features.head(10).round(3))
+print()
+print("Top 10 features - Random Forest (by importance):")
+print(top_rf.head(10).round(3))
+""")
+
+md("""---
+### Key Insights
+
+Reading the actual coefficient/importance values (not just guessing at direction) gives us
+these consistent drivers of attrition, agreed on by both Logistic Regression and Random
+Forest:
+
+- **OverTime = Yes** — the single strongest predictor in *both* models. Employees who work
+  overtime leave at a much higher rate than those who don't.
+- **Tenure and relationship stability** — `TotalWorkingYears`, `YearsWithCurrManager`, and
+  `YearsAtCompany` all push *toward staying* the higher they are: newer employees, and
+  employees who've recently changed managers, are more attrition-prone.
+- **BusinessTravel** — both `Travel_Frequently` and `Travel_Rarely` increase attrition risk
+  relative to employees who don't travel at all (`Non-Travel`) — travel of any regularity
+  is a risk factor compared to a fully local role.
+- **JobRole matters** — e.g. Laboratory Technicians and Sales Representatives show higher
+  attrition risk; Research Directors show lower risk (a senior, stable role).
+- **NumCompaniesWorked (high)** and **YearsSinceLastPromotion (high)** — a history of
+  job-hopping, or going too long without a promotion, both increase attrition risk.
+- **JobSatisfaction, StockOptionLevel, MonthlyIncome, Age** — confirmed as relevant by
+  Random Forest's importance ranking, generally in the expected direction (lower
+  satisfaction/equity/pay/age → higher risk).
+
+**A worthwhile caveat for beginners:** `JobLevel` shows a *positive* Logistic Regression
+coefficient (higher JobLevel → higher predicted attrition), which looks counterintuitive at
+first, since senior employees are usually more stable. This is a classic symptom of
+**multicollinearity** — `JobLevel` is highly correlated with `MonthlyIncome`,
+`TotalWorkingYears`, and `YearsAtCompany` (see the Phase 1 correlation heatmap), so when a
+linear model controls for all of them simultaneously, individual coefficients can shift in
+non-obvious ways. This is exactly why we cross-checked with Random Forest, which is far
+less sensitive to correlated features and gives a more trustworthy view of overall feature
+importance — and it ranks `JobLevel` sensibly among moderately important features rather
+than a dominant one.
+
+### Recommendations for HR
+
+1. **Monitor and limit overtime** — the strongest single driver in both models. Consider
+   workload redistribution or overtime caps for high-risk roles.
+2. **Prioritize new hires and employees with new managers** — attrition risk is highest
+   early in tenure and right after a manager change; structured onboarding/check-ins here
+   could help most.
+3. **Support employees in high-travel roles** — consider travel-frequency limits or extra
+   support (flexible schedules, travel stipends).
+4. **Act on satisfaction survey scores** — treat low `JobSatisfaction` and low
+   `StockOptionLevel` as early-warning signals worth proactive follow-up.
+5. **Review promotion cadence and pay competitiveness**, especially for employees with a
+   long gap since their last promotion or a history of switching companies.
+
+### Challenges Faced
+
+- **Class imbalance**: only ~16% of employees had `Attrition = Yes`, requiring SMOTE on
+  the training data and metric choices (recall/F1 over accuracy) that account for this.
+- **Metric trade-offs**: the model with the best ROC-AUC/accuracy (Random Forest) was not
+  the best choice for the actual business goal, because it had much lower recall. We chose
+  Logistic Regression instead, explicitly prioritizing recall/F1 for the minority class.
+- **Categorical encoding**: several multi-category text fields (`JobRole`, `Department`,
+  `EducationField`, etc.) needed one-hot encoding, which expanded the feature space from
+  31 to 45 columns.
+- **Multicollinearity in linear coefficients**: some Logistic Regression coefficients
+  (e.g. `JobLevel`) were counterintuitive due to correlated features, which we resolved by
+  cross-checking against Random Forest's importance ranking rather than trusting either
+  model's output in isolation.
+
+Next: we save the final model artifacts (`model.pkl`) for reuse outside this notebook.
+""")
+
+# ============================================================
+# SAVE FINAL MODEL
+# ============================================================
+md("""## Saving the Final Model
+
+We save three things using `joblib` (a library optimized for saving scikit-learn objects):
+
+1. **The trained Logistic Regression model** — so it can make predictions without
+   retraining.
+2. **The fitted `StandardScaler`** — new/incoming data must be scaled using the *same*
+   mean/std learned from training data, not re-fit from scratch.
+3. **The exact list of training feature columns** (in order) — so that when new raw data is
+   one-hot encoded, we can align its columns to match what the model expects, even if the
+   new data doesn't contain every category that appeared in training.
+
+All three are bundled into a single `model.pkl` file as a dictionary, which is the
+deliverable requested by the project brief.""")
+
+code("""import joblib
+
+model_bundle = {
+    "model": final_model,
+    "scaler": scaler,
+    "feature_columns": X_train.columns.tolist(),
+    "model_name": final_model_name,
+}
+
+joblib.dump(model_bundle, "model.pkl")
+print("Saved model.pkl containing:", list(model_bundle.keys()))
+""")
+
+md("""**How to reuse this model later** (also documented in `README.md`):
+
+```python
+import joblib
+import pandas as pd
+
+bundle = joblib.load("model.pkl")
+model, scaler, feature_columns = bundle["model"], bundle["scaler"], bundle["feature_columns"]
+
+# new_data must go through the same cleaning/encoding steps as in Phase 2,
+# then be reindexed to match feature_columns before scaling:
+# new_data = new_data.reindex(columns=feature_columns, fill_value=0)
+# new_data_scaled = scaler.transform(new_data)
+# predictions = model.predict(new_data_scaled)
+```
+
+This completes all 5 phases of the project: Data Understanding, Data Preprocessing, Model
+Building, Model Evaluation, and Reporting — with a saved, reusable final model.
 """)
 
 nb["cells"] = cells
