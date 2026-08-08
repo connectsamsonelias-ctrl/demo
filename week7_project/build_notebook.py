@@ -387,6 +387,59 @@ md("""---
 Next: **Phase 3 — Model Building.**
 """)
 
+# ============================================================
+# PHASE 3: MODEL BUILDING
+# ============================================================
+md("""## Phase 3: Model Building
+
+We train four classifiers on the SMOTE-balanced, scaled training data:
+
+1. **Logistic Regression** (linear baseline)
+2. **Decision Tree** (non-linear, single tree)
+3. **Support Vector Machine** with an RBF kernel (non-linear)
+4. **Random Forest** (non-linear ensemble of trees)
+
+Each model will later be evaluated on the same untouched test set in Phase 4, so we can
+compare them fairly.""")
+
+code("""from sklearn.linear_model import LogisticRegression
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.svm import SVC
+from sklearn.calibration import CalibratedClassifierCV
+from sklearn.ensemble import RandomForestClassifier
+
+models = {
+    "Logistic Regression": LogisticRegression(max_iter=1000, random_state=42),
+    "Decision Tree": DecisionTreeClassifier(max_depth=6, random_state=42),
+    # CalibratedClassifierCV wraps the SVM so it can output probabilities (needed for
+    # ROC-AUC in Phase 4) - this replaces the older SVC(probability=True) approach.
+    "SVM (RBF kernel)": CalibratedClassifierCV(SVC(kernel="rbf", random_state=42), ensemble=False),
+    "Random Forest": RandomForestClassifier(n_estimators=300, max_depth=10, random_state=42),
+}
+
+trained_models = {}
+for name, model in models.items():
+    model.fit(X_train_res, y_train_res)
+    trained_models[name] = model
+    print(f"Trained: {name}")
+""")
+
+md("""**Notes on choices:**
+- `max_iter=1000` for Logistic Regression just gives its optimizer enough iterations to
+  converge (default is often too low for this many features).
+- `max_depth=6` for the Decision Tree limits how deep it can grow — without a limit, trees
+  tend to memorize the training data (overfit) instead of learning general patterns.
+- The SVM is wrapped in `CalibratedClassifierCV` so it can output probabilities (not just
+  class labels), which we need for the ROC-AUC metric in Phase 4.
+- `n_estimators=300` for Random Forest means it builds 300 individual trees and averages
+  their votes — more trees generally means more stable predictions.
+- `random_state=42` is set everywhere purely for **reproducibility** — so anyone re-running
+  this notebook gets the exact same results.
+
+All four models are now trained. Next: **Phase 4 — Model Evaluation**, where we'll see
+which one actually performs best, and by which metrics.
+""")
+
 nb["cells"] = cells
 with open("notebook.ipynb", "w") as f:
     nbf.write(nb, f)
