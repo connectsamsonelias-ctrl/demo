@@ -200,6 +200,193 @@ but it can affect linear models like Logistic Regression. Good to know before we
 Next: **Phase 2 — Data Preprocessing.**
 """)
 
+# ============================================================
+# PHASE 2: DATA PREPROCESSING
+# ============================================================
+md("""## Phase 2: Data Preprocessing
+
+Now we get the data ready for machine learning models. Models can't work with raw text
+categories, different scales, or leftover noise — this phase turns our messy real-world
+table into clean numeric input.""")
+
+md("### Step 2.1 — Drop columns with no predictive value")
+
+code("""# EmployeeCount, Over18, StandardHours are constant (same value for every row).
+# EmployeeNumber is just an ID - it identifies a row, it doesn't describe the employee.
+cols_to_drop = ["EmployeeCount", "Over18", "StandardHours", "EmployeeNumber"]
+df_clean = df.drop(columns=cols_to_drop)
+print("Dropped columns:", cols_to_drop)
+print("New shape:", df_clean.shape)
+""")
+
+md("""### Step 2.2 — Encode the target variable
+
+`Attrition` is currently text (`"Yes"`/`"No"`). We convert it to `1`/`0` so models can use
+it as a numeric target.""")
+
+code("""df_clean["Attrition"] = df_clean["Attrition"].map({"Yes": 1, "No": 0})
+df_clean["Attrition"].value_counts()
+""")
+
+md("""### Step 2.3 — Outlier detection (IQR method)
+
+We use the **Interquartile Range (IQR)** rule: for each numeric column, anything below
+`Q1 - 1.5*IQR` or above `Q3 + 1.5*IQR` is flagged as a potential outlier. We inspect them
+rather than blindly deleting rows — HR data like `MonthlyIncome` or `YearsAtCompany` can
+have legitimately high values (e.g. senior employees), so removing them could throw away
+real signal. Tree-based models (Decision Tree, Random Forest) are also naturally robust to
+outliers, so we'll keep the rows but stay aware of them.""")
+
+code("""numeric_cols = df_clean.select_dtypes(include=[np.number]).columns.drop("Attrition")
+
+outlier_summary = {}
+for col in numeric_cols:
+    Q1 = df_clean[col].quantile(0.25)
+    Q3 = df_clean[col].quantile(0.75)
+    IQR = Q3 - Q1
+    lower = Q1 - 1.5 * IQR
+    upper = Q3 + 1.5 * IQR
+    n_outliers = ((df_clean[col] < lower) | (df_clean[col] > upper)).sum()
+    if n_outliers > 0:
+        outlier_summary[col] = n_outliers
+
+outlier_series = pd.Series(outlier_summary).sort_values(ascending=False)
+print("Columns with outliers (count of flagged rows):")
+print(outlier_series)
+""")
+
+md("""**Decision:** we keep these rows. They represent genuine variation in employee
+tenure, income, and history rather than data-entry errors (nothing is negative or
+impossible). We'll rely on scaling and, where needed, robust/tree-based models to handle
+them well.""")
+
+md("""### Step 2.4 — Encode categorical features
+
+We split categorical columns into two types:
+- **Binary categoricals** (2 values, e.g. `Gender`, `OverTime`): map directly to 0/1.
+- **Multi-class categoricals** (e.g. `Department`, `JobRole`): use **one-hot encoding**
+  (`pd.get_dummies`), which creates a separate 0/1 column per category. We avoid plain
+  label encoding (0, 1, 2, 3...) here because that would falsely imply an order/ranking
+  between categories that don't have one (e.g. `Sales` isn't "less than" `R&D`).""")
+
+code("""categorical_cols = df_clean.select_dtypes(include=["object", "string"]).columns.tolist()
+print("Categorical columns:", categorical_cols)
+
+binary_cols = [c for c in categorical_cols if df_clean[c].nunique() == 2]
+multi_cols = [c for c in categorical_cols if df_clean[c].nunique() > 2]
+print("Binary:", binary_cols)
+print("Multi-class:", multi_cols)
+""")
+
+code("""# Binary encoding (Yes/No, Male/Female -> 1/0)
+for col in binary_cols:
+    top_value = df_clean[col].value_counts().index[0]
+    df_clean[col] = (df_clean[col] != top_value).astype(int)
+
+# One-hot encoding for multi-class categoricals
+df_encoded = pd.get_dummies(df_clean, columns=multi_cols, drop_first=True)
+
+print("Shape after encoding:", df_encoded.shape)
+df_encoded.head()
+""")
+
+md("""`drop_first=True` drops one category per feature (e.g. keeps `Department_Sales` and
+`Department_Research & Development` but drops `Department_Human Resources`). This avoids
+redundant columns — if you know the values of all-but-one dummy column, you already know
+the dropped one, so keeping it adds no information (this is called the "dummy variable
+trap").""")
+
+md("""### Step 2.5 — Train/test split
+
+We split the data **before** scaling and **before** balancing classes, so that our test
+set stays a true, untouched sample of real-world data for final evaluation. We use
+`stratify=y` so both the training and test sets preserve the same ~84/16 attrition ratio
+as the full dataset.""")
+
+code("""from sklearn.model_selection import train_test_split
+
+X = df_encoded.drop(columns=["Attrition"])
+y = df_encoded["Attrition"]
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42, stratify=y
+)
+
+print("Train shape:", X_train.shape, "Test shape:", X_test.shape)
+print("\\nTrain class balance:")
+print(y_train.value_counts(normalize=True).round(3))
+print("\\nTest class balance:")
+print(y_test.value_counts(normalize=True).round(3))
+""")
+
+md("""### Step 2.6 — Feature scaling
+
+We use `StandardScaler`, which transforms each numeric feature to have mean 0 and
+standard deviation 1. This matters most for Logistic Regression and SVM, which are
+sensitive to feature scale. We `fit` the scaler **only on training data**, then use it to
+`transform` both train and test — fitting on test data would leak information from the
+test set into training (a common beginner mistake called **data leakage**).""")
+
+code("""from sklearn.preprocessing import StandardScaler
+
+scaler = StandardScaler()
+X_train_scaled = pd.DataFrame(scaler.fit_transform(X_train), columns=X_train.columns, index=X_train.index)
+X_test_scaled = pd.DataFrame(scaler.transform(X_test), columns=X_test.columns, index=X_test.index)
+
+X_train_scaled.describe().loc[["mean", "std"]].round(2)
+""")
+
+md("""### Step 2.7 — Handle class imbalance with SMOTE
+
+**SMOTE (Synthetic Minority Over-sampling Technique)** creates new, synthetic examples of
+the minority class (`Attrition = 1`) by interpolating between existing minority-class
+examples and their nearest neighbors — rather than just duplicating rows, it generates
+plausible new ones. This helps the model learn the minority class pattern properly instead
+of mostly learning to predict the majority class.
+
+**Important:** we apply SMOTE only to the **training set**, after the split. The test set
+must stay exactly as real-world, imbalanced data — that's what a deployed model would
+actually see, and it's the fair way to measure performance.""")
+
+code("""from imblearn.over_sampling import SMOTE
+
+smote = SMOTE(random_state=42)
+X_train_res, y_train_res = smote.fit_resample(X_train_scaled, y_train)
+
+print("Before SMOTE:", y_train.value_counts().to_dict())
+print("After SMOTE :", y_train_res.value_counts().to_dict())
+""")
+
+code("""fig, axes = plt.subplots(1, 2, figsize=(11, 4.5))
+y_train.value_counts().plot(kind="bar", color=sns.color_palette("Set2"), ax=axes[0])
+axes[0].set_title("Training Set — Before SMOTE")
+axes[0].set_xticklabels(["No (0)", "Yes (1)"], rotation=0)
+
+y_train_res.value_counts().plot(kind="bar", color=sns.color_palette("Set2"), ax=axes[1])
+axes[1].set_title("Training Set — After SMOTE")
+axes[1].set_xticklabels(["No (0)", "Yes (1)"], rotation=0)
+
+plt.tight_layout()
+plt.savefig("smote_before_after.png", dpi=120)
+plt.show()
+""")
+
+md("""---
+### Phase 2 Summary
+
+- Dropped 4 uninformative columns (3 constant + the ID column).
+- Encoded `Attrition` to 0/1, binary categoricals to 0/1, and multi-class categoricals via
+  one-hot encoding — final feature set has more columns than the original (one-hot
+  expansion) but is fully numeric.
+- Detected outliers via IQR but kept them — they reflect genuine variation, not errors.
+- Split into train (80%) / test (20%) with stratification, **before** scaling or balancing.
+- Scaled features using `StandardScaler`, fit only on training data.
+- Balanced the training set with SMOTE so both classes have equal representation for
+  model training, while keeping the test set untouched and realistic for evaluation.
+
+Next: **Phase 3 — Model Building.**
+""")
+
 nb["cells"] = cells
 with open("notebook.ipynb", "w") as f:
     nbf.write(nb, f)
