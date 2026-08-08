@@ -440,6 +440,123 @@ All four models are now trained. Next: **Phase 4 — Model Evaluation**, where w
 which one actually performs best, and by which metrics.
 """)
 
+# ============================================================
+# PHASE 4: MODEL EVALUATION
+# ============================================================
+md("""## Phase 4: Model Evaluation
+
+**Why not just use accuracy?** Our test set is still ~84% "No" / 16% "Yes" (we only balanced
+the *training* set, remember). A model could reach ~84% accuracy by never predicting "Yes"
+at all — completely failing the actual business goal of catching at-risk employees. So we
+evaluate with **precision, recall, F1, and ROC-AUC**, focused on the "Yes" (Attrition = 1)
+class, plus a confusion matrix for each model to see exactly what kind of mistakes it makes.""")
+
+code("""from sklearn.metrics import (accuracy_score, precision_score, recall_score,
+                              f1_score, roc_auc_score, confusion_matrix, classification_report)
+
+results = []
+predictions = {}
+
+for name, model in trained_models.items():
+    y_pred = model.predict(X_test_scaled)
+    y_proba = model.predict_proba(X_test_scaled)[:, 1]
+    predictions[name] = (y_pred, y_proba)
+
+    results.append({
+        "Model": name,
+        "Accuracy": accuracy_score(y_test, y_pred),
+        "Precision (Yes)": precision_score(y_test, y_pred),
+        "Recall (Yes)": recall_score(y_test, y_pred),
+        "F1 (Yes)": f1_score(y_test, y_pred),
+        "ROC-AUC": roc_auc_score(y_test, y_proba),
+    })
+
+results_df = pd.DataFrame(results).sort_values("ROC-AUC", ascending=False).reset_index(drop=True)
+results_df.round(3)
+""")
+
+md("""**How to read this table:** each row is a model, each column a metric (all except
+Accuracy are computed specifically for predicting `Attrition = Yes`, the class we actually
+care about catching). Higher is better for all columns. We sort by ROC-AUC as an overall
+ranking, since it summarizes performance across all decision thresholds — but we'll look at
+recall specifically too, since missing at-risk employees is the costlier mistake for HR.""")
+
+code("""results_df.set_index("Model")[["Accuracy", "Precision (Yes)", "Recall (Yes)", "F1 (Yes)", "ROC-AUC"]] \\
+    .plot(kind="bar", figsize=(12, 6), colormap="Set2")
+plt.title("Model Comparison Across Metrics")
+plt.ylabel("Score")
+plt.xticks(rotation=15)
+plt.legend(loc="lower right")
+plt.tight_layout()
+plt.savefig("model_comparison.png", dpi=120)
+plt.show()
+""")
+
+code("""fig, axes = plt.subplots(2, 2, figsize=(11, 10))
+axes = axes.flatten()
+
+for i, (name, (y_pred, _)) in enumerate(predictions.items()):
+    cm = confusion_matrix(y_test, y_pred)
+    sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", ax=axes[i],
+                xticklabels=["No", "Yes"], yticklabels=["No", "Yes"])
+    axes[i].set_title(name)
+    axes[i].set_xlabel("Predicted")
+    axes[i].set_ylabel("Actual")
+
+plt.tight_layout()
+plt.savefig("confusion_matrices.png", dpi=120)
+plt.show()
+""")
+
+md("""**Reading a confusion matrix** (rows = actual, columns = predicted):
+- **Top-left**: actual "No", predicted "No" → correct (true negative).
+- **Top-right**: actual "No", predicted "Yes" → false alarm (false positive).
+- **Bottom-left**: actual "Yes", predicted "No" → **missed** at-risk employee (false negative)
+  — usually the most costly mistake for HR.
+- **Bottom-right**: actual "Yes", predicted "Yes" → correctly caught (true positive).""")
+
+code("""from sklearn.metrics import roc_curve
+
+plt.figure(figsize=(7, 6))
+for name, (_, y_proba) in predictions.items():
+    fpr, tpr, _ = roc_curve(y_test, y_proba)
+    auc = roc_auc_score(y_test, y_proba)
+    plt.plot(fpr, tpr, label=f"{name} (AUC={auc:.3f})")
+
+plt.plot([0, 1], [0, 1], "k--", label="Random guess (AUC=0.5)")
+plt.xlabel("False Positive Rate")
+plt.ylabel("True Positive Rate")
+plt.title("ROC Curves — Model Comparison")
+plt.legend(loc="lower right")
+plt.tight_layout()
+plt.savefig("roc_curves.png", dpi=120)
+plt.show()
+""")
+
+md("""**Reading an ROC curve:** the closer a curve hugs the top-left corner, the better the
+model separates the two classes. The diagonal dashed line represents random guessing
+(AUC=0.5) — every model should beat that by a wide margin.""")
+
+code("""best_model_name = results_df.iloc[0]["Model"]
+print("Best model by ROC-AUC:", best_model_name)
+print()
+print(classification_report(y_test, predictions[best_model_name][0], target_names=["No", "Yes"]))
+""")
+
+md("""---
+### Phase 4 Summary
+
+- All models comfortably beat random guessing (ROC-AUC well above 0.5).
+- We compared models on Accuracy, Precision, Recall, F1, and ROC-AUC — not accuracy alone
+  — because the test set is still imbalanced (84/16), and catching true attrition cases
+  (recall) matters more to the business than raw accuracy.
+- Confusion matrices show each model's exact trade-off between false alarms and missed
+  at-risk employees.
+- The top-ranked model by ROC-AUC will be carried forward as our final model.
+
+Next: **Phase 5 — Feature Importance & Reporting.**
+""")
+
 nb["cells"] = cells
 with open("notebook.ipynb", "w") as f:
     nbf.write(nb, f)
