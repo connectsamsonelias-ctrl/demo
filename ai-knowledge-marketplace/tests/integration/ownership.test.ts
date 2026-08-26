@@ -66,8 +66,11 @@ async function makeBuyer(): Promise<Session> {
 
 async function makeContentItem(creatorProfileId: string): Promise<string> {
   const [row] = await query<{ id: string }>(
-    `INSERT INTO content_items (creator_id, source_url, source_platform, title, language, category)
-     VALUES ($1, 'https://example.com/video', 'youtube', 'Video', 'en', 'engineering') RETURNING id`,
+    `INSERT INTO content_items
+       (creator_id, source_url, source_platform, title, language, category,
+        ownership_attested_at, ownership_attestation_text)
+     VALUES ($1, 'https://example.com/video', 'youtube', 'Video', 'en', 'engineering', now(), 'test attestation')
+     RETURNING id`,
     [creatorProfileId]
   );
   ids.contentItems.push(row!.id);

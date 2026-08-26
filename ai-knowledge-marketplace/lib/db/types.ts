@@ -74,6 +74,8 @@ export interface ContentItemRow {
   status: ContentModerationStatus;
   rights_status: RightsStatus;
   quality_score: string | null; // NUMERIC comes back as string from `pg`
+  ownership_attested_at: string;
+  ownership_attestation_text: string;
   created_at: string;
   updated_at: string;
 }

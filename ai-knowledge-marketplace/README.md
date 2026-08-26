@@ -1,9 +1,9 @@
 # AI Knowledge Licensing Platform — Repository Foundation
 
-This covers **Milestones 1–5**: application skeleton, full core data
-model, authentication, the role/permission system, and the creator
-profile. No marketplace, payments, AI processing, licensing workflow, or
-buyer onboarding is implemented yet.
+This covers **Milestones 1–6**: application skeleton, full core data
+model, authentication, the role/permission system, the creator profile,
+and content submission. No marketplace, payments, AI processing,
+licensing workflow, or buyer onboarding is implemented yet.
 See `../docs/AI_KNOWLEDGE_LICENSING_SPECIFICATION.md` (repo root) for the
 full product/technical review and roadmap.
 
@@ -23,11 +23,14 @@ app/
   api/auth/signup/        Custom: creates a creator/buyer account
   api/auth/me/            Custom: returns the current session or 401
   api/creator/profile/    GET/PATCH — creator's own profile (create-or-update)
+  api/creator/content/    GET/POST — list/submit content; [id]/ GET/PATCH one item
 lib/
   env.ts                 Validated, typed environment variable access
   db/pool.ts               Postgres connection pool + query/withTransaction
   db/types.ts               Hand-written row types mirroring db/migrations/*.sql
   creator/profile.ts        creatorProfileSchema, getCreatorProfile, upsertCreatorProfile
+  creator/content.ts         contentSubmissionSchema/contentUpdateSchema,
+                            createContentItem, list/get/updateContentItem
   auth/
     roles.ts                 Role model (creator/buyer/admin — "visitor" excluded)
     session.ts                AuthProvider interface + NextAuthProvider (default)
@@ -156,11 +159,52 @@ Two layers, deliberately separate:
   distinction matters for a future frontend deciding whether to show a
   "create your profile" flow vs. an edit form.
 
+## Content submission (Milestone 6)
+
+- **`GET`/`POST /api/creator/content`** (list / submit) and
+  **`GET`/`PATCH /api/creator/content/:id`** (single item), matching the
+  spec's C03 screen. `POST` requires `ownershipAttested: true` — a
+  missing field or an explicit `false` both fail validation with a
+  specific error message, not just "invalid input."
+- **The attestation is MVP-scope: a simple required checkbox**, per an
+  explicit decision (platform-level ownership verification via YouTube
+  OAuth was considered and deferred — real scope growth for later, not
+  this milestone). What's captured is immutable: the exact wording shown
+  (`ownership_attestation_text`) and a timestamp, on the row itself —
+  same pattern as `licenses.terms_snapshot`, so if the wording changes
+  later, historical submissions still show what was actually agreed to.
+  **Legal has not reviewed this copy** — flagged the same way the
+  original kickoff review flagged consent language generally.
+- **What submission does *not* decide:** a new item lands at
+  `rights_status = 'SUBMITTED'`, not further along the state machine.
+  Whether the attestation itself should auto-advance to
+  `AUTHORIZATION_PENDING`/`AUTHORIZED_FOR_PROCESSING` is deliberately left
+  to Milestone 13 (Rights management) rather than guessed at here —
+  inventing that mapping now would be inventing legal-state semantics
+  ahead of the milestone that owns them.
+- **`PATCH` cannot change `sourceUrl`, the attestation, `rights_status`,
+  or the moderation `status`** — none of those fields exist on
+  `contentUpdateSchema` at all, so they're silently dropped, not merely
+  rejected. Verified live: a `PATCH` body containing
+  `rights_status: "ACTIVE"` and a replacement `sourceUrl` returns 200
+  with both fields unchanged.
+- **A malformed `:id` (not a UUID) returns 404, not a 500** — validated
+  before it ever reaches Postgres, which would otherwise reject it with
+  an "invalid input syntax" error.
+- **A schema fixture bug this milestone caught:** adding the two new
+  `NOT NULL` attestation columns broke two *earlier* milestones' raw-SQL
+  test fixtures (`schema.test.ts`, `ownership.test.ts`) that inserted
+  `content_items` rows directly. Fixed by updating those fixtures — a
+  reminder that a schema change can break tests outside the migration
+  that made it, and integration tests are what catch that immediately
+  rather than at the next unrelated milestone.
+
 ## Data model (Milestone 2)
 
 All tables from `docs/AI_KNOWLEDGE_LICENSING_SPECIFICATION.md` Section 4
 are in `db/migrations/004`–`011` (plus `014` adding `creator_profiles.links`
-in Milestone 5). Notable decisions made while
+in Milestone 5, and `015` adding the content-item ownership attestation
+columns in Milestone 6). Notable decisions made while
 translating the spec into an actual schema (none of these were pinned
 down explicitly in the source documents):
 
@@ -220,24 +264,27 @@ down explicitly in the source documents):
 
 All of the following were actually run against this exact code (not just
 reviewed): `npm install`, `npm run typecheck`, `npm run lint`, `npm test`
-(33/33 unit tests passing), `npm run build`. Against a real local
-PostgreSQL 16 instance: `npm run migrate` (all 14 migrations applied,
+(44/44 unit tests passing), `npm run build`. Against a real local
+PostgreSQL 16 instance: `npm run migrate` (all 15 migrations applied,
 forward-migrating cleanly from prior milestones' state; idempotent on a
-second run), `npm run test:integration` (26/26 passing — schema
-constraints, credentials, ownership, and the new creator-profile layer:
-defaults on create, update-not-duplicate on a second call, and omitted
-fields surviving a partial update untouched).
+second run), `npm run test:integration` (34/34 passing — schema
+constraints, credentials, ownership, creator-profile, and the new
+content-submission layer: correct initial state, attestation recorded,
+list scoped to the calling creator only, cross-creator access rejected
+with `NotFoundError`, partial updates leaving other fields untouched,
+and audit log entries for both submit and update).
 
 A live `npm run dev` server was driven through the full HTTP lifecycle
-with `curl` for this milestone specifically: signup → login → `GET
-/api/creator/profile` correctly 404s before any profile exists → `PATCH`
-creates it → `GET` returns it → a `PATCH` with `verification_status:
-"verified"` injected into the body is silently ignored (profile stays
-`"unverified"`) → no-cookie request correctly 401s → an invalid `links`
-URL correctly 422s → a partial `PATCH` (only `bio`) correctly leaves
-`expertise`/`languages`/`links` untouched → a signed-in **buyer** hitting
-this creator-only route correctly gets 403. Test data created by these
-live curl calls was deleted from the dev database afterward.
+with `curl` for this milestone specifically: signup → login → profile
+creation → submission without attestation correctly 422s with the
+specific message → submission with attestation succeeds at
+`SUBMITTED`/`pending_review` → list and single-item `GET` return it →
+`PATCH` with `rights_status`/`sourceUrl` injected into the body updates
+only the legitimate `title` field, leaving both injected fields unchanged
+→ a malformed (non-UUID) `:id` correctly 404s rather than 500ing → a
+**second creator** signed up and correctly gets 404 (not 403) on both
+`GET` and `PATCH` against the first creator's content. Test data created
+by these live curl calls was deleted from the dev database afterward.
 
 Milestone 3's live verification additionally covered the full auth
 lifecycle (signup, NextAuth CSRF+login, session cookie, wrong-password

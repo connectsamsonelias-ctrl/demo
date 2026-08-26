@@ -80,8 +80,10 @@ async function makeBuyerProfile() {
 
 async function makeContentItem(creatorId: string) {
   const [row] = await query<{ id: string }>(
-    `INSERT INTO content_items (creator_id, source_url, source_platform, title, language, category)
-     VALUES ($1, 'https://example.com/video', 'youtube', 'Test video', 'en', 'engineering')
+    `INSERT INTO content_items
+       (creator_id, source_url, source_platform, title, language, category,
+        ownership_attested_at, ownership_attestation_text)
+     VALUES ($1, 'https://example.com/video', 'youtube', 'Test video', 'en', 'engineering', now(), 'test attestation')
      RETURNING id`,
     [creatorId]
   );
