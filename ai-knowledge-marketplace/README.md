@@ -1,12 +1,12 @@
 # AI Knowledge Licensing Platform — Repository Foundation
 
-This covers **Milestones 1–9**: application skeleton, full core data
+This covers **Milestones 1–10**: application skeleton, full core data
 model, authentication, the role/permission system, the creator profile,
 content submission, the AI Knowledge Audit, the creator dashboard
 (including the minimum browser-reachable UI needed to demo that flow),
-and the public marketplace (browse + asset detail, no search/filters
-yet — that's Milestone 10). No payments, licensing workflow, or buyer
-onboarding is implemented yet.
+the public marketplace (browse + asset detail), and marketplace search/
+filtering (PostgreSQL full-text search, no Elasticsearch). No payments,
+licensing workflow, or buyer onboarding is implemented yet.
 See `../docs/AI_KNOWLEDGE_LICENSING_SPECIFICATION.md` (repo root) for the
 full product/technical review and roadmap.
 
@@ -37,7 +37,9 @@ app/
   api/creator/content/    GET/POST — list/submit content; [id]/ GET/PATCH one item
   api/creator/content/[id]/audit/  GET/POST — request/check the Knowledge Audit
   api/creator/content/[id]/listing/  POST/DELETE — list/unlist on the marketplace
-  api/marketplace/, api/marketplace/[id]/  GET, public — browse/detail
+  api/marketplace/, api/marketplace/[id]/  GET, public — browse/detail;
+                            api/marketplace/ accepts q/category/language/topic/skill/
+                            minQuality filter query params (Milestone 10)
 lib/
   env.ts                 Validated, typed environment variable access
   db/pool.ts               Postgres connection pool + query/withTransaction
@@ -50,7 +52,9 @@ lib/
                              the minimal SUBMITTED->LISTED->WITHDRAWN transition (Milestone 9)
   marketplace.ts               Public reads (listMarketplaceItems/getMarketplaceItem) —
                              explicit column lists, never SELECT *, so internal fields
-                             (attestation text, creator user_id) can't leak
+                             (attestation text, creator user_id) can't leak. Filters
+                             (Milestone 10) build a parameterized WHERE clause —
+                             every value bound, never string-interpolated
   ai/
     types.ts                  KnowledgeAuditResult schema, qualityScoreFrom
     prompt.ts                  System/user prompt builders (Tier 1: metadata only)
@@ -403,6 +407,44 @@ product:
   check couldn't exercise a real Anthropic call: no `ANTHROPIC_API_KEY`
   in this environment. Stated plainly, not glossed over.
 
+## Marketplace search/filtering (Milestone 10)
+
+- **PostgreSQL full-text search + indexed filters, no Elasticsearch** —
+  per the spec's Section 10 instruction exactly. Migration 017 adds a
+  GIN expression index over `to_tsvector('english', title ||
+  description)` on `content_items`, plus GIN indexes on
+  `knowledge_assets.topics`/`skills` and a btree index on
+  `quality_score` (the spec explicitly calls out "indexed quality
+  score").
+- **Filters implemented, matched against real data:** `q` (full-text),
+  `category`, `language`, `topic`/`skill` (JSONB containment against the
+  audit's extracted topics/skills), `minQuality`. **Filters explicitly
+  NOT implemented**, matched against the spec's P03 list: "Industry" (no
+  distinct column exists — `category` already serves this role, adding a
+  redundant field with no clear definition of the difference would be
+  over-engineering) and "Rights type"/"License availability" (both
+  depend on `licensing_terms` data that Milestone 14 hasn't populated
+  yet — a filter with no real data behind it would be worse than no
+  filter).
+- **Query building is careful about injection, not just parameterized by
+  accident:** `buildFilterConditions()` in `lib/marketplace.ts`
+  constructs the condition list and its parameter array together, in
+  lockstep, so a `$N` placeholder and its bound value can never drift
+  apart as filters are conditionally added. Verified by an integration
+  test passing a SQL-injection-shaped string as `q` — confirmed it's
+  treated as a literal search term (no match, no error, `users` table
+  unaffected) rather than executed.
+- **The filter form is a plain `<form method="get">`** on the Server
+  Component page — no client JS required for search/filter to work,
+  and the resulting URL is shareable/bookmarkable. Verified live that
+  the page pre-fills submitted filter values back into the form inputs.
+- **Invalid filter values fail differently depending on the caller:**
+  the API (`GET /api/marketplace`) returns a real `422` for e.g.
+  `minQuality=150` — verified live. The *page*, by contrast, silently
+  drops an invalid filter and falls back to showing unfiltered results,
+  since a malformed query string (e.g. a stray bookmarked URL) shouldn't
+  break browsing for a human.
+
 ## Data model (Milestone 2)
 
 All tables from `docs/AI_KNOWLEDGE_LICENSING_SPECIFICATION.md` Section 4
@@ -544,3 +586,20 @@ public API and page; unlisting immediately empties the public listing
 and 404s the detail endpoint; and a second creator gets 404 attempting
 to list or unlist the first creator's content via either verb. Test data
 from these live calls was deleted from the dev database afterward.
+
+**Milestone 10 specifically:** `npm run typecheck`/`lint`/`test`
+(69/69 — 62 prior + 7 new schema tests, unaffected), `npm run
+test:integration` (65/65 — 57 prior + 8 new, covering full-text search
+correctly narrowing/excluding, exact-match category/language filters,
+JSONB-containment topic/skill filters, the quality-score threshold,
+combined-filter AND semantics, and the SQL-injection-shaped-string
+test), and `npm run build` (all routes compile). Migration 017 applied
+cleanly against the existing populated schema. Live-verified with
+`curl` against two real listed items with deliberately different
+category/language/topic/skill/quality values: every filter, applied
+individually via `GET /api/marketplace?...`, correctly returned exactly
+the matching item and excluded the other; an out-of-range `minQuality`
+correctly 422'd; and the rendered `/marketplace` page correctly filtered
+its HTML output and pre-filled the submitted values back into the form.
+Test data from these live calls was deleted from the dev database
+afterward.

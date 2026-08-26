@@ -1,4 +1,5 @@
 import { query } from "@/lib/db/pool";
+import { z } from "@/lib/validation";
 
 /**
  * Public, unauthenticated reads — no Session, no ownership check (there
@@ -25,7 +26,77 @@ export interface MarketplaceListing {
 
 const LIMIT = 50;
 
-export async function listMarketplaceItems(): Promise<MarketplaceListing[]> {
+/**
+ * Milestone 10 filters, matching the spec's P03 filter list against what
+ * data actually exists: full-text query (title+description), category,
+ * language, topic/skill (from the audit's knowledge_assets.topics/
+ * skills), and a minimum quality score. Deliberately NOT implemented:
+ * "Industry" (no distinct column — category already serves this role)
+ * and "Rights type"/"License availability" (both depend on
+ * licensing_terms data that Milestone 14 hasn't populated yet —
+ * fabricating filters over nonexistent data would be worse than
+ * omitting them).
+ */
+export const marketplaceFiltersSchema = z.object({
+  q: z.string().trim().min(1).max(200).optional(),
+  category: z.string().trim().min(1).max(100).optional(),
+  language: z.string().trim().min(1).max(50).optional(),
+  topic: z.string().trim().min(1).max(100).optional(),
+  skill: z.string().trim().min(1).max(100).optional(),
+  minQuality: z.coerce.number().int().min(0).max(100).optional(),
+});
+export type MarketplaceFilters = z.infer<typeof marketplaceFiltersSchema>;
+
+/**
+ * Builds the WHERE clause and its parameters together, in lockstep, so a
+ * condition and its placeholder number can never drift apart. Every
+ * value is bound as a query parameter — never string-interpolated —
+ * regardless of how many filters are active.
+ */
+function buildFilterConditions(filters: MarketplaceFilters, startParamIndex: number) {
+  const conditions: string[] = [];
+  const params: unknown[] = [];
+  let i = startParamIndex;
+
+  if (filters.q) {
+    conditions.push(
+      `to_tsvector('english', coalesce(ci.title, '') || ' ' || coalesce(ci.description, '')) @@ plainto_tsquery('english', $${i})`
+    );
+    params.push(filters.q);
+    i++;
+  }
+  if (filters.category) {
+    conditions.push(`ci.category = $${i}`);
+    params.push(filters.category);
+    i++;
+  }
+  if (filters.language) {
+    conditions.push(`ci.language = $${i}`);
+    params.push(filters.language);
+    i++;
+  }
+  if (filters.topic) {
+    conditions.push(`ka.topics @> $${i}::jsonb`);
+    params.push(JSON.stringify([filters.topic]));
+    i++;
+  }
+  if (filters.skill) {
+    conditions.push(`ka.skills @> $${i}::jsonb`);
+    params.push(JSON.stringify([filters.skill]));
+    i++;
+  }
+  if (filters.minQuality !== undefined) {
+    conditions.push(`ka.quality_score >= $${i}`);
+    params.push(filters.minQuality);
+    i++;
+  }
+  return { conditions, params, nextParamIndex: i };
+}
+
+export async function listMarketplaceItems(filters: MarketplaceFilters = {}): Promise<MarketplaceListing[]> {
+  const { conditions, params, nextParamIndex } = buildFilterConditions(filters, 1);
+  const whereClause = conditions.length > 0 ? `AND ${conditions.join(" AND ")}` : "";
+
   return query<MarketplaceListing>(
     `SELECT
        ci.id,
@@ -40,16 +111,16 @@ export async function listMarketplaceItems(): Promise<MarketplaceListing[]> {
      FROM content_items ci
      JOIN creator_profiles cp ON cp.id = ci.creator_id
      LEFT JOIN LATERAL (
-       SELECT summary, quality_score
+       SELECT summary, quality_score, topics, skills
        FROM knowledge_assets
        WHERE content_item_id = ci.id AND asset_type = 'knowledge_audit'
        ORDER BY created_at DESC
        LIMIT 1
      ) ka ON true
-     WHERE ci.rights_status = 'LISTED'
+     WHERE ci.rights_status = 'LISTED' ${whereClause}
      ORDER BY ci.created_at DESC
-     LIMIT $1`,
-    [LIMIT]
+     LIMIT $${nextParamIndex}`,
+    [...params, LIMIT]
   );
 }
 
