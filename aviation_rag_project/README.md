@@ -101,6 +101,14 @@ curl -X POST http://127.0.0.1:8000/query \
 
 ## Stage B - Parse a real manual PDF into ATA-tagged chunks
 
+No real manual handy yet? `data/manuals/synthetic_a320_manual.pdf` is a
+3-page **fully made-up** test manual (fake torque values, fake part
+numbers, clearly labeled "NOT A REAL MANUAL" on every page) covering ATA
+32-21-00, 24-10-00, and 79-00-00 - enough to exercise the whole
+parse -> ingest -> query pipeline before you touch anything real. Generated
+by `scripts/generate_synthetic_manual.py`, which you can re-run any time
+you want a fresh disposable test file.
+
 ```bash
 python scripts/parse_ata_chapters.py data/manuals/your_manual.pdf \
     --aircraft-model Airbus-A320 \
