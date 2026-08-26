@@ -147,22 +147,36 @@ volume (`chroma_data`) that the app *can* write to, since that's its job.
 without errors, and does `curl .../health` respond? Docker networking
 quirks differ by OS - flag anything odd and we'll debug it together.
 
+> Note: the *build* step needs internet access once, to download Python
+> packages and bake in the embedding model (see below). Once built, the
+> image runs with no network dependency at all.
+
 ---
 
-## ⚠️ Important gap found during testing: this is not fully air-gapped yet
+## ✅ Air-gap fix applied
 
-While testing, ChromaDB's *default* embedding function downloaded a small
-ML model (`all-MiniLM-L6-v2`, ~80MB) from the internet on first use. That
-directly contradicts the "zero external network calls" guarantee this
-whole project is built around - in a real air-gapped deployment, that
-download would simply fail.
+Testing surfaced two things that would have silently broken the "zero
+external network calls" guarantee in a real air-gapped deployment. Both
+are now fixed:
 
-**The fix** (recommended before this goes anywhere near a real air-gapped
-network): bake the embedding model into the Docker image at build time
-(so the download happens once, during your build - which does need
-internet - and never again at runtime), or configure Chroma with a fully
-local embedding function. Tell me if you want me to wire this up now or
-in a follow-up stage - it's a real security-relevant fix, not cosmetic.
+1. **Embedding model download.** ChromaDB's default embedding function
+   downloads a small ML model (`all-MiniLM-L6-v2`, ~80MB) from the
+   internet the first time it's used. The `Dockerfile` now triggers that
+   download once, *at image build time* (running as the same `appuser`
+   that runs the container, so the cache path matches), and bakes the
+   result into the image. The running container never needs to fetch it -
+   `docker build` needs internet once; `docker compose up` afterward does
+   not.
+2. **Telemetry.** ChromaDB also sends anonymized usage analytics to
+   PostHog by default. This is now explicitly disabled both in code
+   (`app/rag_engine.py` passes `Settings(anonymized_telemetry=False)`)
+   and via the `ANONYMIZED_TELEMETRY=FALSE` environment variable in both
+   the `Dockerfile` and `docker-compose.yml`, so it's off no matter how
+   the app is started.
+
+If you swap in a different embedding model or add another library later,
+re-check it for the same pattern (silent network calls on first use) -
+it's a common trap in ML tooling that otherwise looks "local."
 
 ---
 

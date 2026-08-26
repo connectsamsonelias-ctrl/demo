@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any
 
 import chromadb
+from chromadb.config import Settings
 
 logger = logging.getLogger("aviation_rag")
 
@@ -37,7 +38,14 @@ class AdvancedAviationRAG:
         only to `db_path` on local disk.
         """
         logger.info("Initializing localized data node at: %s", db_path)
-        self.client = chromadb.PersistentClient(path=db_path)
+        # anonymized_telemetry defaults to True in chromadb and would send
+        # analytics to PostHog over the network - explicitly disabled here
+        # (in addition to the ANONYMIZED_TELEMETRY=FALSE env var set in the
+        # Docker image) so this stays genuinely air-gapped at runtime.
+        self.client = chromadb.PersistentClient(
+            path=db_path,
+            settings=Settings(anonymized_telemetry=False),
+        )
 
         self.collection = self.client.get_or_create_collection(
             name=collection_name,

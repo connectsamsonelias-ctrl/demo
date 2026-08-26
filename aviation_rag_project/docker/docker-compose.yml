@@ -9,6 +9,11 @@ services:
       - AVIATION_RAG_API_KEY=${AVIATION_RAG_API_KEY:?set AVIATION_RAG_API_KEY in your .env file}
       - AVIATION_RAG_DB_PATH=/app/aviation_vector_db
       - AVIATION_RAG_SNAG_HISTORY_PATH=/app/data/snag_history.json
+      # Belt-and-braces: chromadb's telemetry default is already disabled
+      # in code (Settings(anonymized_telemetry=False)) and in the image
+      # (ENV in the Dockerfile) - set again here so it's obvious from this
+      # file alone that no analytics call is made at runtime.
+      - ANONYMIZED_TELEMETRY=FALSE
     volumes:
       # Standalone ChromaDB persistent storage: its own named volume,
       # independent of the app container's filesystem, so the vector
