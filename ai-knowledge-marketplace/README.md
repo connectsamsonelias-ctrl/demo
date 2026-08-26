@@ -1,8 +1,9 @@
 # AI Knowledge Licensing Platform — Repository Foundation
 
-This covers **Milestones 1–3**: application skeleton, full core data
-model, and authentication. No marketplace, payments, AI processing,
-licensing workflow, or creator/buyer onboarding *UI* is implemented yet.
+This covers **Milestones 1–4**: application skeleton, full core data
+model, authentication, and the role/permission system. No marketplace,
+payments, AI processing, licensing workflow, or creator/buyer onboarding
+*UI* is implemented yet.
 See `../docs/AI_KNOWLEDGE_LICENSING_SPECIFICATION.md` (repo root) for the
 full product/technical review and roadmap.
 
@@ -30,6 +31,8 @@ lib/
     session.ts                AuthProvider interface + NextAuthProvider (default)
                              + DevStubAuthProvider (tests/local convenience)
     authorize.ts               Server-side requireRole()/requireSession() guards
+    permissions.ts               can(role, action) — declarative capability matrix
+    ownership.ts                 assertOwns*() — per-row ownership checks (DB-backed)
     password.ts                 scrypt hash/verify (no bcrypt dependency)
     credentials.ts               createUserWithPassword / verifyCredentials
     next-auth-options.ts          NextAuth config (Credentials provider, JWT)
@@ -100,6 +103,33 @@ npm run dev                  # http://localhost:3000
   running instance; revisit with a shared store before multi-instance
   deployment.
 
+## Role/permission system (Milestone 4)
+
+Two layers, deliberately separate:
+
+- **`can(role, action)`** (`lib/auth/permissions.ts`) — a declarative
+  matrix mirroring the spec's Section 4 role capabilities. Answers
+  "could a creator ever do this", nothing more. A unit test asserts
+  every declared action is granted to at least one role, to catch a
+  typo'd action name silently granting nobody access.
+- **`assertOwns*()`** (`lib/auth/ownership.ts`) — per-row, DB-backed
+  ownership checks: does *this* content item / access request / license
+  belong to *this* signed-in user. Milestone 1's `requireRole` only
+  checks account type — without this layer, any creator could edit any
+  other creator's content, since nothing checked *which* creator's row
+  it was.
+- **Ownership failures raise `NotFoundError` (404), not
+  `ForbiddenError` (403).** A 403 on someone else's private resource
+  confirms it exists; a 404 doesn't — same enumeration-avoidance
+  reasoning as `verifyCredentials()` in Milestone 3. Verified by
+  integration tests actually asserting the exception type, not just
+  that *some* error is thrown.
+- No routes call these yet — there's no content/license data for a
+  route to guard until Milestone 6+. This milestone is the library
+  future route handlers will call; it's exercised directly by
+  integration tests that create real rows (two creators, two buyers, a
+  license) and confirm each owns only what they created.
+
 ## Data model (Milestone 2)
 
 All tables from `docs/AI_KNOWLEDGE_LICENSING_SPECIFICATION.md` Section 4
@@ -163,13 +193,15 @@ down explicitly in the source documents):
 
 All of the following were actually run against this exact code (not just
 reviewed): `npm install`, `npm run typecheck`, `npm run lint`, `npm test`
-(20/20 unit tests passing), `npm run build`. Against a real local
-PostgreSQL 16 instance: `npm run migrate` (all 13 migrations applied,
-forward-migrating cleanly from prior milestones' state; idempotent on a
-second run), `npm run test:integration` (13/13 passing — schema
-constraints plus the credentials layer: hashed-password storage, audit
-log on signup, duplicate-email rejection, correct/wrong-password/
-unknown-email/suspended-account outcomes).
+(27/27 unit tests passing), `npm run build`. Against a real local
+PostgreSQL 16 instance: `npm run migrate` (all 13 migrations applied —
+Milestone 4 added no schema changes — forward-migrating cleanly from
+prior milestones' state; idempotent on a second run), `npm run
+test:integration` (21/21 passing — schema constraints, the credentials
+layer, and the new ownership layer: an owning creator/buyer allowed, a
+non-owner rejected with `NotFoundError` specifically, a nonexistent
+resource likewise, and both legitimate sides of a license allowed while
+a third party is rejected).
 
 A live `npm run dev` server was also driven through the full HTTP
 lifecycle with `curl`, not just the test suite: signup → NextAuth CSRF +
