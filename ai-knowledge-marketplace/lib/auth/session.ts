@@ -1,6 +1,8 @@
 import { getToken } from "next-auth/jwt";
+import { getServerSession } from "next-auth";
 import type { NextRequest } from "next/server";
 import { getEnv } from "@/lib/env";
+import { authOptions } from "@/lib/auth/next-auth-options";
 import type { Role } from "@/lib/auth/roles";
 
 export interface Session {
@@ -71,4 +73,19 @@ export function getAuthProvider(): AuthProvider {
 
 export async function getSession(request: Request): Promise<Session | null> {
   return provider.getSession(request);
+}
+
+/**
+ * For Server Components/Pages, which have no incoming Request object to
+ * read cookies from — only `getServerSession(authOptions)` (backed by
+ * `next/headers`) works there. Route Handlers must keep using
+ * getSession()/requireRole() above; this is a separate path, not a
+ * replacement, and — unlike getSession() — is not swappable via
+ * setAuthProvider() for tests, since App Router pages are not unit
+ * tested the way route handlers are in this project.
+ */
+export async function getPageSession(): Promise<Session | null> {
+  const session = await getServerSession(authOptions);
+  if (!session?.user) return null;
+  return { userId: session.user.id, email: session.user.email, role: session.user.role };
 }

@@ -1,9 +1,11 @@
 # AI Knowledge Licensing Platform — Repository Foundation
 
-This covers **Milestones 1–7**: application skeleton, full core data
+This covers **Milestones 1–8**: application skeleton, full core data
 model, authentication, the role/permission system, the creator profile,
-content submission, and the AI Knowledge Audit. No marketplace, payments,
-licensing workflow, or buyer onboarding is implemented yet.
+content submission, the AI Knowledge Audit, and the creator dashboard —
+including the minimum browser-reachable UI (sign up/in, profile edit,
+content submission) needed to actually demo that flow. No marketplace,
+payments, licensing workflow, or buyer onboarding is implemented yet.
 See `../docs/AI_KNOWLEDGE_LICENSING_SPECIFICATION.md` (repo root) for the
 full product/technical review and roadmap.
 
@@ -17,6 +19,13 @@ JWT sessions).
 
 ```
 app/
+  page.tsx                Home — links into the flow below (not the real P01 landing page)
+  signin/, signup/          Client-component forms (Milestone 8)
+  creator/profile/edit/      Client-component form (Milestone 8 — profile UI gap from M5)
+  creator/content/new/        Client-component form (Milestone 8 — content UI gap from M6)
+  creator/dashboard/           Server Component (Milestone 8) — real content+audit data via
+                              direct lib calls; licenses/requests/earnings are honest
+                              placeholders (those domains don't exist yet)
   api/health/            DB connectivity sanity check only
   api/auth/[...nextauth]/ NextAuth's own endpoints (csrf, callback/credentials,
                          signout, session, providers)
@@ -277,6 +286,59 @@ Two layers, deliberately separate:
   attestation. The audit result and the rights state machine are kept
   orthogonal for now.
 
+## Creator dashboard + browser-reachable UI (Milestone 8)
+
+Before this milestone, nothing built in Milestones 1–7 could actually be
+clicked through in a browser — Milestone 3 (Authentication) and
+Milestone 6 (Content submission) were deliberately API-only per their
+scope. Since you asked to keep moving toward a demo, this milestone adds
+the minimum UI to make the existing backend reachable, not a designed
+product:
+
+- **`/signin`, `/signup`** — plain forms. Sign-in uses `next-auth/react`'s
+  `signIn("credentials", …)` client helper, which is exactly the path
+  Milestone 3 designed the login flow around (see
+  `docs/decisions/0001-auth-provider.md`).
+- **`/creator/profile/edit`, `/creator/content/new`** — fill UI gaps
+  left by Milestones 5 and 6, which only built the API.
+- **`/creator/dashboard`** (Screen C06) — a Server Component, not a
+  client-fetched page: it calls `getCreatorProfile`/
+  `listContentItemsForCreator`/`getLatestAudit` directly (no HTTP
+  round-trip to its own API) and bakes real data into the server-rendered
+  HTML. Verified by fetching the raw HTML with `curl`, not just hitting
+  the JSON API — confirmed the audit's live failure message
+  ("No AI provider is configured…") renders correctly in the page, and
+  that a second creator's dashboard shows zero matches for the first
+  creator's content title.
+- **Active licenses / Requests / Earnings are placeholder cards**, not
+  fabricated data — those domains (Milestones 12, 14, 16) don't exist
+  yet, and showing a fake "0 licenses" would misrepresent what's
+  actually been built.
+- **A real regression caught by re-running the existing test suite:**
+  adding `getPageSession()` (`lib/auth/session.ts`) pulled in
+  `next-auth-options.ts`, whose `authOptions` object called
+  `getEnv().NEXTAUTH_SECRET` directly inside the object literal —
+  evaluated at *module load*, not request time. Since `session.ts` is
+  imported by `lib/auth/authorize.ts`, this silently broke Milestone 1's
+  "unit tests are DB/env-independent" guarantee: `authorize.test.ts`
+  started crashing on import alone, in an environment with no
+  `DATABASE_URL`/`NEXTAUTH_SECRET` set — exactly the environment unit
+  tests are supposed to run in. Fixed by removing the explicit `secret:`
+  field entirely; NextAuth reads `process.env.NEXTAUTH_SECRET` itself
+  when it's omitted, keeping this file consistent with every other
+  `getEnv()` call in the codebase (all lazy, inside a function, at
+  request time).
+- **YouTube ingestion remains explicitly deferred**, per your decision —
+  the content-submission form's copy says outright that the audit runs
+  against submitted details, not the actual video, so this isn't a
+  silent limitation.
+- Known minor gap, not fixed here: the ownership-attestation checkbox
+  label in `/creator/content/new` is a hand-copied duplicate of
+  `OWNERSHIP_ATTESTATION_TEXT` in `lib/creator/content.ts` (the backend
+  always records its own canonical string regardless of the frontend's
+  wording, so this isn't a correctness bug, but the two could drift out
+  of sync if either is edited alone).
+
 ## Data model (Milestone 2)
 
 All tables from `docs/AI_KNOWLEDGE_LICENSING_SPECIFICATION.md` Section 4
@@ -382,3 +444,20 @@ Milestone 3's live verification additionally covered the full auth
 lifecycle (signup, NextAuth CSRF+login, session cookie, wrong-password
 rejection, duplicate-email rejection, signout, and the rate limiter
 triggering a live 429) — see commit history for that detailed walkthrough.
+
+**Milestone 8 specifically:** `npm run typecheck`/`lint`/`test`
+(62/62 — after fixing the eager-`getEnv()` regression described above),
+`npm run test:integration` (44/44, unchanged — this milestone added no
+schema and no new domain logic), and `npm run build` all pass with the
+five new pages compiled in. Live-verified by fetching real server-
+rendered HTML with `curl` through the entire flow: unauthenticated
+`/creator/dashboard` → `307` to `/signin`; signed in with no profile →
+"complete your profile" prompt renders; profile completed, no content →
+"No content submitted yet." renders; content submitted → the title and
+a "Run Knowledge Audit" button render; audit requested → the page shows
+"Audit queued (attempt 0)…"; after running the real `npm run
+worker:audit` CLI to exhaustion → the page shows "Audit failed:" with
+the actual `error_message` in red; `/signup` and `/signin` render real
+forms; and a second creator's dashboard shows zero occurrences of the
+first creator's content title. Test data from these live calls was
+deleted from the dev database afterward.

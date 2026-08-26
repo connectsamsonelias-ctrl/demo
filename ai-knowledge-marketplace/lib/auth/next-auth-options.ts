@@ -1,6 +1,5 @@
 import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
-import { getEnv } from "@/lib/env";
 import { verifyCredentials } from "@/lib/auth/credentials";
 
 /**
@@ -10,9 +9,20 @@ import { verifyCredentials } from "@/lib/auth/credentials";
  * docs/decisions/0001-auth-provider.md for why v4 (stable) over the v5
  * beta, and for how /api/auth/login and /api/auth/logout from the source
  * spec map onto NextAuth's own conventional endpoints.
+ *
+ * No explicit `secret:` here, on purpose: NextAuth reads
+ * `process.env.NEXTAUTH_SECRET` itself when it's omitted. An earlier
+ * version of this file called getEnv().NEXTAUTH_SECRET directly in this
+ * object literal, which evaluates at *module load*, not at request
+ * time — and lib/auth/session.ts imports this module, so any unit test
+ * that transitively imports session.ts without DATABASE_URL/
+ * NEXTAUTH_SECRET set would crash just from the import, breaking
+ * Milestone 1's "unit tests are DB/env-independent" design. Every other
+ * getEnv() call in this codebase is lazy (inside a function, called at
+ * request time); omitting `secret` here keeps this file consistent with
+ * that instead of being the one exception.
  */
 export const authOptions: NextAuthOptions = {
-  secret: getEnv().NEXTAUTH_SECRET,
   session: { strategy: "jwt" },
   providers: [
     CredentialsProvider({
