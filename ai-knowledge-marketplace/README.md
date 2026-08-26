@@ -1,9 +1,9 @@
 # AI Knowledge Licensing Platform — Repository Foundation
 
-This covers **Milestones 1–4**: application skeleton, full core data
-model, authentication, and the role/permission system. No marketplace,
-payments, AI processing, licensing workflow, or creator/buyer onboarding
-*UI* is implemented yet.
+This covers **Milestones 1–5**: application skeleton, full core data
+model, authentication, the role/permission system, and the creator
+profile. No marketplace, payments, AI processing, licensing workflow, or
+buyer onboarding is implemented yet.
 See `../docs/AI_KNOWLEDGE_LICENSING_SPECIFICATION.md` (repo root) for the
 full product/technical review and roadmap.
 
@@ -22,10 +22,12 @@ app/
                          signout, session, providers)
   api/auth/signup/        Custom: creates a creator/buyer account
   api/auth/me/            Custom: returns the current session or 401
+  api/creator/profile/    GET/PATCH — creator's own profile (create-or-update)
 lib/
   env.ts                 Validated, typed environment variable access
   db/pool.ts               Postgres connection pool + query/withTransaction
   db/types.ts               Hand-written row types mirroring db/migrations/*.sql
+  creator/profile.ts        creatorProfileSchema, getCreatorProfile, upsertCreatorProfile
   auth/
     roles.ts                 Role model (creator/buyer/admin — "visitor" excluded)
     session.ts                AuthProvider interface + NextAuthProvider (default)
@@ -130,10 +132,35 @@ Two layers, deliberately separate:
   integration tests that create real rows (two creators, two buyers, a
   license) and confirm each owns only what they created.
 
+## Creator profile (Milestone 5)
+
+- **`GET`/`PATCH /api/creator/profile`**, matching the spec's C02 screen.
+  `PATCH` is create-or-update (the spec has no separate `POST`) — the
+  first call after signup creates the row, later calls update it. Two
+  explicit code paths (`lib/creator/profile.ts`), not an `ON CONFLICT`
+  one-liner: a single query can't cleanly express "default this on
+  insert, but keep the existing value on update" for a `NOT NULL` JSONB
+  column with a default.
+- **`verification_status` is structurally impossible to set here** — it
+  isn't a field on `creatorProfileSchema` at all, so a client-supplied
+  value in the request body is silently dropped by zod, not merely
+  rejected. Verified live: a `PATCH` with `verification_status:
+  "verified"` in the body returns 200 with the profile still
+  `"unverified"`.
+- **A small schema gap found while implementing this:** the spec's C02
+  screen lists a "Links" field that migration 004's `creator_profiles`
+  table had no column for. Added via migration 014
+  (`links JSONB NOT NULL DEFAULT '[]'`) rather than overloading
+  `expertise`.
+- `GET` before a profile exists returns 404 (not an empty object) — the
+  distinction matters for a future frontend deciding whether to show a
+  "create your profile" flow vs. an edit form.
+
 ## Data model (Milestone 2)
 
 All tables from `docs/AI_KNOWLEDGE_LICENSING_SPECIFICATION.md` Section 4
-are in `db/migrations/004`–`012`. Notable decisions made while
+are in `db/migrations/004`–`011` (plus `014` adding `creator_profiles.links`
+in Milestone 5). Notable decisions made while
 translating the spec into an actual schema (none of these were pinned
 down explicitly in the source documents):
 
@@ -193,24 +220,26 @@ down explicitly in the source documents):
 
 All of the following were actually run against this exact code (not just
 reviewed): `npm install`, `npm run typecheck`, `npm run lint`, `npm test`
-(27/27 unit tests passing), `npm run build`. Against a real local
-PostgreSQL 16 instance: `npm run migrate` (all 13 migrations applied —
-Milestone 4 added no schema changes — forward-migrating cleanly from
-prior milestones' state; idempotent on a second run), `npm run
-test:integration` (21/21 passing — schema constraints, the credentials
-layer, and the new ownership layer: an owning creator/buyer allowed, a
-non-owner rejected with `NotFoundError` specifically, a nonexistent
-resource likewise, and both legitimate sides of a license allowed while
-a third party is rejected).
+(33/33 unit tests passing), `npm run build`. Against a real local
+PostgreSQL 16 instance: `npm run migrate` (all 14 migrations applied,
+forward-migrating cleanly from prior milestones' state; idempotent on a
+second run), `npm run test:integration` (26/26 passing — schema
+constraints, credentials, ownership, and the new creator-profile layer:
+defaults on create, update-not-duplicate on a second call, and omitted
+fields surviving a partial update untouched).
 
-A live `npm run dev` server was also driven through the full HTTP
-lifecycle with `curl`, not just the test suite: signup → NextAuth CSRF +
-`POST /api/auth/callback/credentials` login → session cookie issued →
-`GET /api/auth/me` returns the session → wrong-password login correctly
-rejected → duplicate-email signup correctly rejected with 409 →
-`role: "admin"` signup correctly rejected with 422 → `POST
-/api/auth/signout` clears the cookie → `GET /api/auth/me` correctly
-returns to 401 → and the rate limiter was confirmed live (12 rapid
-`POST /api/auth/*` requests, first 10 succeeded, remainder 429). Test
-data created by these live curl calls was deleted from the dev database
-afterward.
+A live `npm run dev` server was driven through the full HTTP lifecycle
+with `curl` for this milestone specifically: signup → login → `GET
+/api/creator/profile` correctly 404s before any profile exists → `PATCH`
+creates it → `GET` returns it → a `PATCH` with `verification_status:
+"verified"` injected into the body is silently ignored (profile stays
+`"unverified"`) → no-cookie request correctly 401s → an invalid `links`
+URL correctly 422s → a partial `PATCH` (only `bio`) correctly leaves
+`expertise`/`languages`/`links` untouched → a signed-in **buyer** hitting
+this creator-only route correctly gets 403. Test data created by these
+live curl calls was deleted from the dev database afterward.
+
+Milestone 3's live verification additionally covered the full auth
+lifecycle (signup, NextAuth CSRF+login, session cookie, wrong-password
+rejection, duplicate-email rejection, signout, and the rate limiter
+triggering a live 429) — see commit history for that detailed walkthrough.

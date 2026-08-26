@@ -25,6 +25,7 @@ export interface CreatorProfileRow {
   bio: string | null;
   expertise: unknown[];
   languages: unknown[];
+  links: unknown[];
   verification_status: VerificationStatus;
   created_at: string;
   updated_at: string;
