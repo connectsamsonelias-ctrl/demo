@@ -1,17 +1,19 @@
 import { redirect } from "next/navigation";
 import { getPageSession } from "@/lib/auth/session";
 import { getBuyerProfile } from "@/lib/buyer/profile";
+import { listAccessRequestsForBuyer } from "@/lib/buyer/requests";
 import { SignOutButton } from "./sign-out-button";
 
 export const dynamic = "force-dynamic";
 
 /**
- * Screen B05 (Buyer Dashboard). Requests / Active licenses / Payments /
- * Downloads / Saved assets are honest placeholders, same pattern as the
- * creator dashboard (Milestone 8): those domains (Milestones 12, 14, 15)
- * don't exist yet, and "Saved assets" specifically has no backing table
- * at all anywhere in the schema — that would be a new bookmarking
- * feature, not buyer onboarding, so it's not being added here either.
+ * Screen B05 (Buyer Dashboard). Requests is real as of Milestone 12.
+ * Active licenses / Payments / Downloads / Saved assets remain honest
+ * placeholders, same pattern as the creator dashboard (Milestone 8):
+ * those domains (Milestones 14, 15) don't exist yet, and "Saved assets"
+ * specifically has no backing table at all anywhere in the schema —
+ * that would be a new bookmarking feature, not buyer onboarding, so
+ * it's not being added here either.
  */
 export default async function BuyerDashboardPage() {
   const session = await getPageSession();
@@ -19,6 +21,7 @@ export default async function BuyerDashboardPage() {
   if (session.role !== "buyer") redirect("/");
 
   const profile = await getBuyerProfile(session.userId);
+  const requests = profile ? await listAccessRequestsForBuyer(session) : [];
 
   return (
     <div className="max-w-3xl">
@@ -55,8 +58,26 @@ export default async function BuyerDashboardPage() {
         </a>
       </div>
 
+      <section className="mt-8">
+        <h2 className="font-medium">Requests</h2>
+        {requests.length === 0 ? (
+          <p className="mt-2 text-sm text-slate-600">No access requests yet.</p>
+        ) : (
+          <ul className="mt-3 flex flex-col gap-2">
+            {requests.map((r) => (
+              <li key={r.id} className="rounded border border-slate-200 p-3 text-sm">
+                <a href={`/marketplace/${r.content_item_id}`} className="font-medium underline">
+                  {r.contentItemTitle}
+                </a>
+                <p className="text-xs text-slate-500">status: {r.status}</p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
       <section className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {["Requests", "Active licenses", "Payments", "Downloads/access", "Saved assets"].map((label) => (
+        {["Active licenses", "Payments", "Downloads/access", "Saved assets"].map((label) => (
           <div key={label} className="rounded border border-dashed border-slate-300 p-4 text-sm text-slate-500">
             <p className="font-medium text-slate-700">{label}</p>
             <p className="mt-1">Available once that milestone ships.</p>

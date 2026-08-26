@@ -1,13 +1,15 @@
 # AI Knowledge Licensing Platform — Repository Foundation
 
-This covers **Milestones 1–11**: application skeleton, full core data
+This covers **Milestones 1–12**: application skeleton, full core data
 model, authentication, the role/permission system, the creator profile,
 content submission, the AI Knowledge Audit, the creator dashboard
 (including the minimum browser-reachable UI needed to demo that flow),
 the public marketplace (browse + asset detail), marketplace search/
-filtering (PostgreSQL full-text search, no Elasticsearch), and buyer
-onboarding (buyer profile + dashboard). No payments, licensing workflow,
-or access requests are implemented yet.
+filtering (PostgreSQL full-text search, no Elasticsearch), buyer
+onboarding (buyer profile + dashboard), and access requests (buyer
+request → creator approve/reject). No payments, licensing workflow, or
+rights-state-machine transitions beyond the minimal ones already made
+are implemented yet.
 See `../docs/AI_KNOWLEDGE_LICENSING_SPECIFICATION.md` (repo root) for the
 full product/technical review and roadmap.
 
@@ -30,9 +32,11 @@ app/
                               placeholders (those domains don't exist yet)
   marketplace/, marketplace/[id]/  Public Server Components (Milestone 9) — no auth
   buyer/profile/edit/          Client-component form (Milestone 11)
-  buyer/dashboard/              Server Component (Milestone 11) — real profile data;
-                              requests/licenses/payments/downloads/saved-assets are
-                              honest placeholders (no backing tables/domains yet)
+  buyer/dashboard/              Server Component — real profile + Requests (Milestone 12);
+                              licenses/payments/downloads/saved-assets are honest
+                              placeholders (no backing tables/domains yet)
+  marketplace/[id]/request-access-form.tsx  Client component (Milestone 12) — Screen B04
+  creator/dashboard/request-actions.tsx      Client component (Milestone 12) — approve/reject
   api/health/            DB connectivity sanity check only
   api/auth/[...nextauth]/ NextAuth's own endpoints (csrf, callback/credentials,
                          signout, session, providers)
@@ -46,6 +50,9 @@ app/
                             api/marketplace/ accepts q/category/language/topic/skill/
                             minQuality filter query params (Milestone 10)
   api/buyer/profile/    GET/PATCH — buyer's own profile (create-or-update, Milestone 11)
+  api/buyer/requests/    GET/POST — list own / submit an access request (Milestone 12)
+  api/creator/requests/  GET — list requests for the creator's own content
+  api/creator/requests/[id]/approve, /reject/  POST each — resolve a pending request
 lib/
   env.ts                 Validated, typed environment variable access
   db/pool.ts               Postgres connection pool + query/withTransaction
@@ -65,6 +72,13 @@ lib/
                              mirrors creator/profile.ts exactly (Milestone 11); fills a
                              gap in the spec's own API list (no buyer profile endpoint
                              was ever specified, despite Screen B02 needing one)
+  buyer/requests.ts             accessRequestSchema, createAccessRequest,
+                             listAccessRequestsForBuyer, getOwnAccessRequestForContent
+                             (Milestone 12) — only a LISTED item can be requested;
+                             a duplicate in-flight request returns the existing row
+  creator/requests.ts            listAccessRequestsForCreator, approveAccessRequest,
+                             rejectAccessRequest (Milestone 12) — deliberately does
+                             NOT touch content_items.rights_status (see below)
   ai/
     types.ts                  KnowledgeAuditResult schema, qualityScoreFrom
     prompt.ts                  System/user prompt builders (Tier 1: metadata only)
@@ -482,6 +496,54 @@ product:
   redirects to `/` — the same `requireRole`/`getPageSession` guards used
   everywhere else, not new logic written for buyers specifically.
 
+## Access requests (Milestone 12)
+
+- **`POST`/`GET /api/buyer/requests`** (Screen B04) and
+  **`GET /api/creator/requests`** + **`POST .../approve`** /
+  **`POST .../reject`**, matching the spec's API list exactly — this is
+  the milestone where the two sides of the marketplace actually connect
+  for the first time.
+- **The scope decision flagged before writing any code:** the spec's
+  rights state machine names `LICENSE_REQUESTED` directly after
+  `LISTED`, but `access_requests` is one-to-many against a content item
+  (several buyers can request the same listing) while
+  `content_items.rights_status` is a single value per item — advancing
+  it here would conflate a 1:many relationship into a 1:1 field, which
+  is architecturally wrong, not merely a simplification to flag.
+  `rights_status` is left untouched by request creation, approval, *and*
+  rejection; the real next transition (to `LICENSED`) belongs to
+  Milestone 14, when an actual license is created from an approved
+  request. Verified live and by an integration test: approving a
+  request leaves `content_items.rights_status` at `'LISTED'`.
+- **Only a publicly `LISTED` item can be requested** — checked directly
+  against `content_items.rights_status`, not by routing through the
+  public `lib/marketplace.ts` read layer (this is an authenticated
+  path, not an anonymous one). Requesting access to `SUBMITTED` or
+  unlisted content 404s — verified live and in an integration test.
+- **Duplicate-request idempotency**, same pattern as Milestone 9's
+  listing toggle: re-requesting while a `pending`/`approved` request
+  already exists for that buyer+item returns the existing row instead
+  of creating a second one. Verified live: submitting a second request
+  with different text returns the same request `id`.
+- **Approve/reject only accept a `'pending'` request** — resolving an
+  already-resolved request returns a `422` with a specific message
+  ("only 'pending' requests can be resolved"), not a silent no-op or a
+  generic error. Verified live.
+- **Ownership is enforced on both sides**, reusing the Milestone 4
+  helpers rather than new logic: `assertOwnsContentForAccessRequest`
+  gates approve/reject to the content's actual creator (a different
+  creator gets `404`, verified live with a real second creator account,
+  not just a missing-profile 404), and buyers only ever see their own
+  requests (`requireBuyerProfileId` scopes the query).
+- **The asset detail page now branches on real session state**: signed
+  out → sign-in prompt; signed in as buyer with no profile → "complete
+  your profile" prompt; signed in as buyer with a profile and no
+  existing request → the request form; already requested → the current
+  status. All four states verified live by fetching the actual rendered
+  HTML at each stage.
+- Pricing and full licensing terms remain an explicit placeholder on the
+  asset detail page — that's Milestone 14, and the page says so.
+
 ## Data model (Milestone 2)
 
 All tables from `docs/AI_KNOWLEDGE_LICENSING_SPECIFICATION.md` Section 4
@@ -657,3 +719,25 @@ organization data; a `verification_status` injection attempt in the
 **creator** gets `403` on `/api/buyer/profile` and is redirected away
 from `/buyer/dashboard`. Test data from these live calls was deleted
 from the dev database afterward.
+
+**Milestone 12 specifically:** `npm run typecheck`/`lint`/`test`
+(81/81 — 75 prior + 6 new schema tests), `npm run test:integration`
+(84/84 — 70 prior + 14 new, covering: rejecting a request against a
+non-listed item, duplicate-request idempotency, buyer/creator query
+scoping, `getOwnAccessRequestForContent` returning `null` for a never-
+requested item and for a creator session, the full approve/reject
+lifecycle, rejecting re-resolution of an already-resolved request,
+cross-creator rejection with the row confirmed untouched afterward, and
+that `rights_status` never changes as a side effect of approval), and
+`npm run build` (all new routes compile, no new migrations needed —
+`access_requests` already existed). Live-verified end to end with
+`curl` across a real creator and a real buyer account: the asset detail
+page correctly rendered all four session states (signed out / no buyer
+profile / has profile+no request / has a request), a real request was
+submitted through the actual API, re-submitting returned the same
+request id, the creator dashboard showed the real buyer organization
+name and Approve/Reject buttons, approval succeeded and was reflected
+on both dashboards, re-approving 422'd, `rights_status` stayed `LISTED`
+in the database, and a second creator (with their own profile) got 404
+attempting to resolve the first creator's request. Test data from these
+live calls was deleted from the dev database afterward.

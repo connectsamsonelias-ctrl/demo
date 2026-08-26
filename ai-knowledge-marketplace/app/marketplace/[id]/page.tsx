@@ -1,5 +1,9 @@
 import { notFound } from "next/navigation";
 import { getMarketplaceItem } from "@/lib/marketplace";
+import { getPageSession } from "@/lib/auth/session";
+import { getBuyerProfile } from "@/lib/buyer/profile";
+import { getOwnAccessRequestForContent } from "@/lib/buyer/requests";
+import { RequestAccessForm } from "./request-access-form";
 
 export const dynamic = "force-dynamic";
 
@@ -12,10 +16,53 @@ function List({ label, values }: { label: string; values: unknown[] }) {
   );
 }
 
-/** Screen P04 (Asset Detail). */
+/**
+ * Screen P04 (Asset Detail). The "Request access" section (B04) is real —
+ * it submits an actual access_requests row via Milestone 12. Pricing and
+ * licensing terms stay a placeholder — that's Milestone 14.
+ */
 export default async function MarketplaceItemPage({ params }: { params: { id: string } }) {
   const item = await getMarketplaceItem(params.id);
   if (!item) notFound();
+
+  const session = await getPageSession();
+
+  let accessSection: React.ReactNode;
+  if (!session) {
+    accessSection = (
+      <p>
+        <a href="/signin" className="underline">
+          Sign in
+        </a>{" "}
+        as a buyer to request access.
+      </p>
+    );
+  } else if (session.role !== "buyer") {
+    accessSection = <p className="text-slate-500">Only buyer accounts can request access.</p>;
+  } else {
+    const profile = await getBuyerProfile(session.userId);
+    if (!profile) {
+      accessSection = (
+        <p>
+          <a href="/buyer/profile/edit" className="underline">
+            Complete your buyer profile
+          </a>{" "}
+          to request access.
+        </p>
+      );
+    } else {
+      const existing = await getOwnAccessRequestForContent(session, item.id);
+      if (!existing) {
+        accessSection = <RequestAccessForm contentItemId={item.id} />;
+      } else {
+        accessSection = (
+          <p>
+            Your request status: <span className="font-medium">{existing.status}</span>
+          </p>
+        );
+      }
+    }
+  }
 
   return (
     <div className="max-w-2xl">
@@ -54,9 +101,13 @@ export default async function MarketplaceItemPage({ params }: { params: { id: st
         )}
       </div>
 
-      <div className="mt-6 rounded border border-dashed border-slate-300 p-4 text-sm text-slate-500">
-        <p className="font-medium text-slate-700">Licensing &amp; access requests</p>
-        <p className="mt-1">Pricing and &quot;Request access&quot; are available once those milestones ship.</p>
+      <div className="mt-6 rounded border border-slate-200 p-4 text-sm">
+        <p className="font-medium text-slate-700">Request access</p>
+        <p className="mt-1 text-slate-500">
+          Pricing and full licensing terms are available once that milestone ships — this only
+          submits the access request itself.
+        </p>
+        <div className="mt-3">{accessSection}</div>
       </div>
     </div>
   );

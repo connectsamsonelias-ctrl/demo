@@ -3,20 +3,22 @@ import { getPageSession } from "@/lib/auth/session";
 import { getCreatorProfile } from "@/lib/creator/profile";
 import { listContentItemsForCreator } from "@/lib/creator/content";
 import { getLatestAudit, type AuditStatus } from "@/lib/creator/audit";
+import { listAccessRequestsForCreator } from "@/lib/creator/requests";
 import type { ContentItemRow } from "@/lib/db/types";
 import { SignOutButton } from "./sign-out-button";
 import { RunAuditButton } from "./run-audit-button";
 import { ListingButton } from "./listing-button";
+import { RequestActions } from "./request-actions";
 
 export const dynamic = "force-dynamic";
 
 /**
- * Screen C06 (Creator Dashboard). Content assets + Audit results are
- * real, queried directly (Server Component -> lib call, no self-fetch
- * round trip). Active licenses / Requests / Earnings are placeholders —
- * those domains (Milestones 12, 14, 16) don't exist yet, and faking a
- * "0 licenses" card from nothing would misrepresent what's actually
- * been built.
+ * Screen C06 (Creator Dashboard). Content assets + Audit results +
+ * Requests are real, queried directly (Server Component -> lib call, no
+ * self-fetch round trip). Active licenses / Earnings remain
+ * placeholders — those domains (Milestones 14, 16) don't exist yet, and
+ * faking a "0 licenses" card from nothing would misrepresent what's
+ * actually been built.
  */
 export default async function CreatorDashboardPage() {
   const session = await getPageSession();
@@ -27,12 +29,14 @@ export default async function CreatorDashboardPage() {
 
   let items: ContentItemRow[] = [];
   let audits: Record<string, AuditStatus> = {};
+  let requests: Awaited<ReturnType<typeof listAccessRequestsForCreator>> = [];
   if (profile) {
     items = await listContentItemsForCreator(session);
     const entries = await Promise.all(
       items.map(async (item) => [item.id, await getLatestAudit(session, item.id)] as const)
     );
     audits = Object.fromEntries(entries);
+    requests = await listAccessRequestsForCreator(session);
   }
 
   return (
@@ -111,8 +115,30 @@ export default async function CreatorDashboardPage() {
         </section>
       )}
 
-      <section className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        {["Active licenses", "Requests", "Earnings"].map((label) => (
+      {profile && (
+        <section className="mt-8">
+          <h2 className="font-medium">Requests</h2>
+          {requests.length === 0 ? (
+            <p className="mt-2 text-sm text-slate-600">No access requests yet.</p>
+          ) : (
+            <ul className="mt-3 flex flex-col gap-2">
+              {requests.map((r) => (
+                <li key={r.id} className="rounded border border-slate-200 p-3 text-sm">
+                  <p className="font-medium">{r.contentItemTitle}</p>
+                  <p className="text-xs text-slate-500">
+                    from {r.buyerOrganizationName} · status: {r.status}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-600">Intended use: {r.intended_use}</p>
+                  {r.status === "pending" && <RequestActions requestId={r.id} />}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
+
+      <section className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2">
+        {["Active licenses", "Earnings"].map((label) => (
           <div key={label} className="rounded border border-dashed border-slate-300 p-4 text-sm text-slate-500">
             <p className="font-medium text-slate-700">{label}</p>
             <p className="mt-1">Available once that milestone ships.</p>
