@@ -1,12 +1,13 @@
 # AI Knowledge Licensing Platform — Repository Foundation
 
-This covers **Milestones 1–10**: application skeleton, full core data
+This covers **Milestones 1–11**: application skeleton, full core data
 model, authentication, the role/permission system, the creator profile,
 content submission, the AI Knowledge Audit, the creator dashboard
 (including the minimum browser-reachable UI needed to demo that flow),
-the public marketplace (browse + asset detail), and marketplace search/
-filtering (PostgreSQL full-text search, no Elasticsearch). No payments,
-licensing workflow, or buyer onboarding is implemented yet.
+the public marketplace (browse + asset detail), marketplace search/
+filtering (PostgreSQL full-text search, no Elasticsearch), and buyer
+onboarding (buyer profile + dashboard). No payments, licensing workflow,
+or access requests are implemented yet.
 See `../docs/AI_KNOWLEDGE_LICENSING_SPECIFICATION.md` (repo root) for the
 full product/technical review and roadmap.
 
@@ -28,6 +29,10 @@ app/
                               direct lib calls; licenses/requests/earnings are honest
                               placeholders (those domains don't exist yet)
   marketplace/, marketplace/[id]/  Public Server Components (Milestone 9) — no auth
+  buyer/profile/edit/          Client-component form (Milestone 11)
+  buyer/dashboard/              Server Component (Milestone 11) — real profile data;
+                              requests/licenses/payments/downloads/saved-assets are
+                              honest placeholders (no backing tables/domains yet)
   api/health/            DB connectivity sanity check only
   api/auth/[...nextauth]/ NextAuth's own endpoints (csrf, callback/credentials,
                          signout, session, providers)
@@ -40,6 +45,7 @@ app/
   api/marketplace/, api/marketplace/[id]/  GET, public — browse/detail;
                             api/marketplace/ accepts q/category/language/topic/skill/
                             minQuality filter query params (Milestone 10)
+  api/buyer/profile/    GET/PATCH — buyer's own profile (create-or-update, Milestone 11)
 lib/
   env.ts                 Validated, typed environment variable access
   db/pool.ts               Postgres connection pool + query/withTransaction
@@ -55,6 +61,10 @@ lib/
                              (attestation text, creator user_id) can't leak. Filters
                              (Milestone 10) build a parameterized WHERE clause —
                              every value bound, never string-interpolated
+  buyer/profile.ts             buyerProfileSchema, getBuyerProfile, upsertBuyerProfile —
+                             mirrors creator/profile.ts exactly (Milestone 11); fills a
+                             gap in the spec's own API list (no buyer profile endpoint
+                             was ever specified, despite Screen B02 needing one)
   ai/
     types.ts                  KnowledgeAuditResult schema, qualityScoreFrom
     prompt.ts                  System/user prompt builders (Tier 1: metadata only)
@@ -445,6 +455,33 @@ product:
   since a malformed query string (e.g. a stray bookmarked URL) shouldn't
   break browsing for a human.
 
+## Buyer onboarding (Milestone 11)
+
+- **A real gap found before writing any code:** the spec's Section 9 API
+  list has `GET`/`PATCH /api/creator/profile` but no buyer equivalent,
+  even though `buyer_profiles` has existed in the schema since
+  Milestone 2 and Screen B02 explicitly requires organization/industry/
+  use-case fields. Added `GET`/`PATCH /api/buyer/profile`, mirroring
+  `lib/creator/profile.ts`'s create-or-update pattern exactly (same
+  two-explicit-branches reasoning, same `verification_status`
+  exclusion). No schema changes needed — the table was already there.
+- **Screen B05 (Buyer dashboard) cards for Requests/Active licenses/
+  Payments/Downloads are honest placeholders**, same pattern as the
+  creator dashboard (Milestone 8) — those domains (Milestones 12, 14,
+  15) don't exist yet. **"Saved assets" specifically has no backing
+  table anywhere in the schema** — that would be a new bookmarking
+  feature, not buyer onboarding, so it's not being added here either;
+  it gets the same placeholder treatment rather than being quietly
+  dropped from the screen.
+- **Search/browsing needed nothing new for buyers** — the marketplace
+  (Milestones 9–10) was already public and unauthenticated, matching the
+  spec's own "Visitor can browse" design; a buyer's only addition is the
+  profile + dashboard shell around that existing browsing experience.
+- Role isolation verified live: a signed-in **creator** hitting
+  `/api/buyer/profile` gets `403`, and visiting `/buyer/dashboard`
+  redirects to `/` — the same `requireRole`/`getPageSession` guards used
+  everywhere else, not new logic written for buyers specifically.
+
 ## Data model (Milestone 2)
 
 All tables from `docs/AI_KNOWLEDGE_LICENSING_SPECIFICATION.md` Section 4
@@ -603,3 +640,20 @@ correctly 422'd; and the rendered `/marketplace` page correctly filtered
 its HTML output and pre-filled the submitted values back into the form.
 Test data from these live calls was deleted from the dev database
 afterward.
+
+**Milestone 11 specifically:** `npm run typecheck`/`lint`/`test`
+(75/75 — 69 prior + 6 new schema tests), `npm run test:integration`
+(70/70 — 65 prior + 5 new, covering defaults on create, update-not-
+duplicate on a second call, partial updates leaving other fields
+untouched, and that `verification_status` can never be written), and
+`npm run build` (all new routes/pages compile, no new migrations
+needed — the table already existed). Live-verified with `curl`:
+unauthenticated `/buyer/dashboard` redirects 307 to `/signin`; `GET
+/api/buyer/profile` 404s before any profile exists and the dashboard
+shows the "complete your profile" prompt; after `PATCH`-creating a
+profile, both the API response and the rendered dashboard show the real
+organization data; a `verification_status` injection attempt in the
+`PATCH` body is silently ignored (stays `"unverified"`); and a signed-in
+**creator** gets `403` on `/api/buyer/profile` and is redirected away
+from `/buyer/dashboard`. Test data from these live calls was deleted
+from the dev database afterward.
