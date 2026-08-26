@@ -1,8 +1,8 @@
 # AI Knowledge Licensing Platform — Repository Foundation
 
-This covers **Milestones 1–6**: application skeleton, full core data
+This covers **Milestones 1–7**: application skeleton, full core data
 model, authentication, the role/permission system, the creator profile,
-and content submission. No marketplace, payments, AI processing,
+content submission, and the AI Knowledge Audit. No marketplace, payments,
 licensing workflow, or buyer onboarding is implemented yet.
 See `../docs/AI_KNOWLEDGE_LICENSING_SPECIFICATION.md` (repo root) for the
 full product/technical review and roadmap.
@@ -24,6 +24,7 @@ app/
   api/auth/me/            Custom: returns the current session or 401
   api/creator/profile/    GET/PATCH — creator's own profile (create-or-update)
   api/creator/content/    GET/POST — list/submit content; [id]/ GET/PATCH one item
+  api/creator/content/[id]/audit/  GET/POST — request/check the Knowledge Audit
 lib/
   env.ts                 Validated, typed environment variable access
   db/pool.ts               Postgres connection pool + query/withTransaction
@@ -31,6 +32,12 @@ lib/
   creator/profile.ts        creatorProfileSchema, getCreatorProfile, upsertCreatorProfile
   creator/content.ts         contentSubmissionSchema/contentUpdateSchema,
                             createContentItem, list/get/updateContentItem
+  creator/audit.ts           requestAudit / getLatestAudit (enqueues jobs, never calls AI inline)
+  ai/
+    types.ts                  KnowledgeAuditResult schema, qualityScoreFrom
+    prompt.ts                  System/user prompt builders (Tier 1: metadata only)
+    provider.ts                 AIAuditProvider interface, env-driven default resolution
+    anthropic-provider.ts        Real Claude Haiku 4.5 integration (client injected for testability)
   auth/
     roles.ts                 Role model (creator/buyer/admin — "visitor" excluded)
     session.ts                AuthProvider interface + NextAuthProvider (default)
@@ -45,9 +52,12 @@ lib/
   validation/               Zod wrapper (parseOrThrow)
   audit/log.ts               Audit-log write helper (writes to audit_logs table)
   rate-limit.ts              In-memory fixed-window limiter (single-instance only)
-  rights/ payments/ ai/ search/   Reserved, not implemented (see each README)
+  rights/ payments/ search/   Reserved, not implemented (see each README)
 middleware.ts             Rate-limits POST /api/auth/* by IP
-workers/                 Reserved for background job workers (not implemented)
+workers/audit/
+  processor.ts               processNextAuditJob() — claims one queued job (FOR UPDATE
+                            SKIP LOCKED), calls the AI provider, writes knowledge_assets
+  run.ts                      `npm run worker:audit` — polling loop over processor.ts
 db/
   migrations/               Plain-SQL migrations + a minimal runner (no ORM)
   schema/ seeds/             Reserved for later milestones
@@ -82,6 +92,7 @@ npm run dev                  # http://localhost:3000
 | `npm run test:watch` | Run unit tests in watch mode |
 | `npm run test:integration` | Run schema/DB tests (requires `DATABASE_URL` + migrations applied) |
 | `npm run migrate` | Apply pending SQL migrations |
+| `npm run worker:audit` | Poll and process queued Knowledge Audit jobs (needs `ANTHROPIC_API_KEY` to succeed; runs fine without it, jobs just fail closed) |
 
 ## Authentication (Milestone 3)
 
@@ -199,6 +210,73 @@ Two layers, deliberately separate:
   that made it, and integration tests are what catch that immediately
   rather than at the next unrelated milestone.
 
+## AI Knowledge Audit (Milestone 7)
+
+- **`POST`/`GET /api/creator/content/:id/audit`**, matching the spec's
+  C04 screen and API list. `POST` never calls the AI provider inline —
+  it only inserts a `content_processing_jobs` row and returns `202`
+  immediately (verified live at ~900ms, dominated by Next.js dev-mode
+  compile time, not the AI call — the AI call structurally cannot block
+  this response, the code path never awaits it). The actual work happens
+  in `workers/audit/processor.ts`, run via `npm run worker:audit`.
+- **Scope decision: Tier 1 (metadata) only, not Tier 2 (transcript).**
+  The spec's full pipeline assumes a fetched video transcript, but that
+  depends on the still-unresolved YouTube ingestion method decision
+  (flagged in Milestone 1, never confirmed). The audit prompt is
+  explicit with the model that it only has creator-supplied title/
+  description/category/language, not the actual content, and is
+  instructed to score `depth`/`completeness`/`consistency`
+  conservatively as a result — verified by a unit test asserting the
+  system prompt actually contains that disclaimer.
+- **Model: Claude Haiku 4.5**, chosen for cost — this is a free,
+  unauthenticated-cost, high-volume acquisition feature, not a paid
+  path. See the kickoff conversation for the cost comparison against
+  Sonnet/Opus (~₹0.60/audit at Haiku pricing).
+- **No `ANTHROPIC_API_KEY` exists in this dev/build environment.** The
+  real integration is fully built and unit-tested (JSON parsing, schema
+  validation, error messages) against an injected fake client — but the
+  one hop this environment genuinely could not exercise is an actual
+  authenticated call to Anthropic. Network reachability to
+  `api.anthropic.com` was confirmed (401 without a key, not a connection
+  failure). What *was* verified live end-to-end, including through the
+  real `npm run worker:audit` CLI (not just the test suite): a job
+  enqueued via the real HTTP API, picked up by the real worker process,
+  and correctly failing closed after 3 attempts with a clear
+  `error_message` — because `NotConfiguredAIProvider` refuses to
+  fabricate a plausible-looking audit rather than silently inventing
+  data when unconfigured. Once a real key is set, the exact same code
+  path runs `AnthropicAuditProvider` instead — nothing else changes.
+- **Async job architecture:** `content_processing_jobs` claiming uses
+  `SELECT ... FOR UPDATE SKIP LOCKED`, released before the slow external
+  AI call (not held for its duration) so multiple worker instances can't
+  double-process a job but also don't block each other on unrelated
+  jobs. Retries up to 3 attempts, then `status = 'failed'` with the
+  error recorded — verified by an integration test driving a job through
+  all three attempts to the failure state, not just the first failure.
+- **A schema gap found here, same pattern as prior milestones:**
+  `content_processing_jobs` had no `created_at`/`queued_at`, and its
+  `id` is a random (non-time-ordered) UUID, so "the latest job for this
+  content item" had no reliable sort column — status=`queued` jobs also
+  have a `NULL started_at`. Fixed via migration 016 (`queued_at`).
+- **Provenance is honest about what actually ran:** `AIAuditProvider`
+  now exposes a `modelId` the worker records into
+  `knowledge_assets.provenance`, rather than a hardcoded model-name
+  string that would have silently lied whenever a stub or different
+  provider actually ran (caught and fixed while writing this, before it
+  shipped).
+- **Duplicate-request idempotency:** requesting an audit while one is
+  already queued/running returns the existing job rather than enqueuing
+  a second one — avoids piling up redundant paid API calls if a creator
+  double-clicks. Verified live and in an integration test.
+- Deliberately **not implemented here**: any change to `rights_status`
+  as a result of the audit completing. The spec's state machine has
+  `ANALYSIS_COMPLETE` as a named state, but jumping there from
+  `SUBMITTED` would skip the two `AUTHORIZATION_*` states this project
+  has deliberately left undefined pending Milestone 13 (Rights
+  management) — same reasoning as Milestone 6's stance on the
+  attestation. The audit result and the rights state machine are kept
+  orthogonal for now.
+
 ## Data model (Milestone 2)
 
 All tables from `docs/AI_KNOWLEDGE_LICENSING_SPECIFICATION.md` Section 4
@@ -248,43 +326,57 @@ down explicitly in the source documents):
 - **No ORM.** Raw `pg` + hand-written SQL migrations, per the project's
   "prefer simple, boring, reliable systems" principle. Revisit only if
   this becomes a real maintenance burden.
-- **No background-job runner yet.** `workers/` exists as a placeholder;
-  a polling worker over `content_processing_jobs` lands starting
-  Milestone 7.
+- **No background-job runner in Milestone 1** — `workers/` existed only
+  as a placeholder there; the real polling worker was built in
+  Milestone 7 (`workers/audit/`).
 
 ## Manual configuration required
 
 - A running PostgreSQL database and its `DATABASE_URL`.
 - `NEXTAUTH_SECRET` — generate with `openssl rand -base64 32`.
+- `ANTHROPIC_API_KEY` — optional; the app and every other feature run
+  fine without it. Only `npm run worker:audit` needs it, and without it
+  audit jobs fail closed (status `failed`, a clear `error_message`) —
+  they never fabricate a fake result.
 - Everything else in `.env.example` is commented out — those are for
-  later milestones (object storage, payments, AI provider) once those
-  business decisions are made.
+  later milestones (object storage, payments) once those business
+  decisions are made.
 
 ## Verification status
 
 All of the following were actually run against this exact code (not just
 reviewed): `npm install`, `npm run typecheck`, `npm run lint`, `npm test`
-(44/44 unit tests passing), `npm run build`. Against a real local
-PostgreSQL 16 instance: `npm run migrate` (all 15 migrations applied,
+(62/62 unit tests passing), `npm run build`. Against a real local
+PostgreSQL 16 instance: `npm run migrate` (all 16 migrations applied,
 forward-migrating cleanly from prior milestones' state; idempotent on a
-second run), `npm run test:integration` (34/34 passing — schema
-constraints, credentials, ownership, creator-profile, and the new
-content-submission layer: correct initial state, attestation recorded,
-list scoped to the calling creator only, cross-creator access rejected
-with `NotFoundError`, partial updates leaving other fields untouched,
-and audit log entries for both submit and update).
+second run), `npm run test:integration` (44/44 passing — schema
+constraints, credentials, ownership, creator-profile, content-submission,
+and the new audit layer: job creation, request idempotency,
+cross-creator rejection, successful processing with a stub AI provider,
+metadata passed through unmodified, the full retry-to-failure lifecycle
+across 3 attempts, `content.audit_completed` audit-log entries, and no
+`knowledge_assets` row ever written on a failed run).
 
-A live `npm run dev` server was driven through the full HTTP lifecycle
-with `curl` for this milestone specifically: signup → login → profile
-creation → submission without attestation correctly 422s with the
-specific message → submission with attestation succeeds at
-`SUBMITTED`/`pending_review` → list and single-item `GET` return it →
-`PATCH` with `rights_status`/`sourceUrl` injected into the body updates
-only the legitimate `title` field, leaving both injected fields unchanged
-→ a malformed (non-UUID) `:id` correctly 404s rather than 500ing → a
-**second creator** signed up and correctly gets 404 (not 403) on both
-`GET` and `PATCH` against the first creator's content. Test data created
-by these live curl calls was deleted from the dev database afterward.
+**One real limitation, stated plainly rather than worked around:** this
+environment has no `ANTHROPIC_API_KEY`, so the actual authenticated call
+to Anthropic could not be exercised — network reachability to
+`api.anthropic.com` was confirmed (401 without a key, not a connection
+failure), and the request/response handling (JSON parsing, schema
+validation, error messages) is fully unit-tested against an injected
+fake client, but a real response was never observed. Everything *around*
+that one hop was verified live end-to-end, including through the actual
+`npm run worker:audit` CLI (not just the test suite, and not a
+reimplementation of it): a job enqueued via `POST` returned in ~900ms
+(dominated by dev-server compile time, not the AI call — the code path
+structurally never awaits it), correctly stayed `queued` before the
+worker ran, and after three real worker iterations correctly reached
+`status: "failed"` with a clear `error_message` and no fabricated
+`result` — because `NotConfiguredAIProvider` refuses to invent a
+plausible-looking audit. Also verified live: re-`POST`ing while a job is
+already queued returns the same job (no duplicate), and a second signed-
+up creator gets 404 (not 403) on both `GET` and `POST` against another
+creator's audit. Test data created by these live calls was deleted from
+the dev database afterward.
 
 Milestone 3's live verification additionally covered the full auth
 lifecycle (signup, NextAuth CSRF+login, session cookie, wrong-password

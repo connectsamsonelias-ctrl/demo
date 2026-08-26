@@ -178,6 +178,7 @@ export interface ContentProcessingJobRow {
   status: ProcessingJobStatus;
   attempts: number;
   error_message: string | null;
+  queued_at: string;
   started_at: string | null;
   completed_at: string | null;
 }

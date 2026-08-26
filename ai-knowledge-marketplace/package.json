@@ -11,9 +11,11 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:integration": "vitest run -c vitest.integration.config.ts",
-    "migrate": "tsx db/migrations/run.ts"
+    "migrate": "tsx db/migrations/run.ts",
+    "worker:audit": "tsx workers/audit/run.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.120.0",
     "next": "^14.2.5",
     "next-auth": "^4.24.15",
     "pg": "^8.12.0",

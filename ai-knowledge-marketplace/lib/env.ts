@@ -11,6 +11,11 @@ const envSchema = z.object({
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
   // Signs session JWTs — see .env.example for how to generate one.
   NEXTAUTH_SECRET: z.string().min(32, "NEXTAUTH_SECRET must be at least 32 characters"),
+  // Optional, unlike the above: the app must still run (migrations, auth,
+  // content submission, ...) without it configured. Only the AI Knowledge
+  // Audit feature needs it, and it fails that one feature closed — not
+  // the whole app — when absent. See lib/ai/provider.ts.
+  ANTHROPIC_API_KEY: z.string().min(1).optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;
