@@ -6,3 +6,6 @@ venv/
 .rag_store/
 .pytest_cache/
 *.egg-info/
+aviation_vector_db/
+aviation_rag_project/.venv/
+aviation_rag_project/data/parsed_chunks.json

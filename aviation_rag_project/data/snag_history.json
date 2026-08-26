@@ -1,0 +1,9 @@
+{
+  "VT-IAF01": [
+    {"date": "2025-04-12", "fault_code": "FLT-32-1", "action": "Replaced nose wheel seal."},
+    {"date": "2025-11-03", "fault_code": "FLT-32-1", "action": "Tightened assembly bolt, fluid top-up."}
+  ],
+  "VT-IAF02": [
+    {"date": "2026-01-15", "fault_code": "FLT-24-5", "action": "Reset main battery bus switch."}
+  ]
+}

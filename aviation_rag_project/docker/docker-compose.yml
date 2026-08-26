@@ -1,0 +1,32 @@
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: aviation_rag_api
+    restart: unless-stopped
+    environment:
+      - AVIATION_RAG_API_KEY=${AVIATION_RAG_API_KEY:?set AVIATION_RAG_API_KEY in your .env file}
+      - AVIATION_RAG_DB_PATH=/app/aviation_vector_db
+      - AVIATION_RAG_SNAG_HISTORY_PATH=/app/data/snag_history.json
+    volumes:
+      # Standalone ChromaDB persistent storage: its own named volume,
+      # independent of the app container's filesystem, so the vector
+      # index survives image rebuilds and container recreation.
+      - chroma_data:/app/aviation_vector_db
+      # Source manuals / snag history: mounted READ-ONLY so the running
+      # container can never modify or delete the data it was trained on.
+      - ../data:/app/data:ro
+    ports:
+      - "8000:8000"
+    networks:
+      - aviation_rag_net
+    # No external network egress required - this is a fully air-gapped
+    # local service once the image is built.
+
+networks:
+  aviation_rag_net:
+    driver: bridge
+
+volumes:
+  chroma_data:
