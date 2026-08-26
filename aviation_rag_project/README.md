@@ -151,6 +151,75 @@ quirks differ by OS - flag anything odd and we'll debug it together.
 > packages and bake in the embedding model (see below). Once built, the
 > image runs with no network dependency at all.
 
+### Docker does not make this air-gapped - your network does
+
+This is a common misconception worth being explicit about: **"air-gapped"
+describes the machine/network this runs on, not the software.** It means
+that machine has no physical or logical connection to the internet - a
+decision your infrastructure/security team makes, not something any
+Dockerfile or compose setting can create on its own. A plain Python
+process on a genuinely disconnected machine is exactly as air-gapped as a
+container on one; conversely, Docker on an internet-connected machine is
+not air-gapped no matter how it's configured.
+
+What Docker *does* give you here is a clean way to build once on a
+connected machine, then move only the finished image (no source code, no
+`pip install` step, no internet) onto the isolated machine:
+
+1. **On a connected machine**, build and export the image to a single file:
+
+   ```bash
+   docker compose -f docker/docker-compose.yml build
+   docker save aviation_rag_api:latest -o aviation_rag_api.tar
+   ```
+
+2. **Move `aviation_rag_api.tar` to the air-gapped machine** using your
+   organization's approved offline transfer process (approved USB media,
+   a data diode, whatever your security policy requires - this project
+   has no opinion on that part, it's a physical/procedural control).
+
+3. **On the air-gapped machine**, load and run it - no internet contact
+   at any point in this step:
+
+   ```bash
+   docker load -i aviation_rag_api.tar
+   cp .env.example .env      # set AVIATION_RAG_API_KEY
+   docker compose -f docker/docker-compose.yml --env-file .env up
+   ```
+
+   (`docker compose up` without `--build` uses the already-loaded image
+   rather than trying to build - so this step never touches the network.)
+
+### Extra guardrail: the container's network can't reach out, even if something tries to
+
+`docker-compose.yml`'s network is now configured with `internal: true`.
+This removes that Docker network's route to the outside world - so even
+if a bug in the app, or a compromised dependency, tried to make an
+outbound call, Docker itself would block it at the network layer. This is
+a second layer of defense on top of - not a substitute for - your actual
+air-gapped network having no route out.
+
+Note `internal: true` does **not** block the host from reaching the
+container: the `ports: 8000:8000` mapping is a separate host-to-container
+forwarding rule that still works normally, so `/health` and `/query` are
+still reachable from the host machine exactly as before.
+
+**Verify this yourself** once you've built the image (this sandbox's own
+network policy blocked me from pulling the Python base image to test it
+live, so please confirm this on your machine):
+
+```bash
+docker compose -f docker/docker-compose.yml --env-file .env up -d
+# from the host - this should still work:
+curl http://localhost:8000/health
+# from inside the container - this should FAIL (no route to the internet):
+docker exec aviation_rag_api python -c "import urllib.request; urllib.request.urlopen('https://google.com', timeout=5)"
+```
+
+The second command should raise a connection/network error. If it
+succeeds instead, something is misconfigured - let me know and we'll dig
+in.
+
 ---
 
 ## ✅ Air-gap fix applied

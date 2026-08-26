@@ -3,6 +3,11 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile
+    # Explicit, stable image name/tag - without this, Compose derives the
+    # tag from the project name (which defaults to the *compose file's
+    # parent directory* name, not this project's name, and is easy to get
+    # wrong when scripting `docker save` for offline transfer below).
+    image: aviation_rag_api:latest
     container_name: aviation_rag_api
     restart: unless-stopped
     environment:
@@ -32,6 +37,19 @@ services:
 networks:
   aviation_rag_net:
     driver: bridge
+    # internal: true removes this network's route to the outside world -
+    # containers on it cannot reach the internet even if something in the
+    # app (a bug, a compromised dependency) tries to. This does NOT block
+    # the host from reaching the container: the `ports:` mapping above is
+    # a separate host->container forwarding rule, unaffected by this
+    # setting, so `curl http://localhost:8000/health` from the host still
+    # works exactly as before.
+    #
+    # Note: air-gapping itself is a property of the HOST machine/network
+    # having no physical or logical route to the internet - that has to
+    # be enforced by your infrastructure, not by this file. This setting
+    # is a second layer of defense on top of that, not a substitute for it.
+    internal: true
 
 volumes:
   chroma_data:
