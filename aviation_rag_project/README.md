@@ -180,27 +180,88 @@ it's a common trap in ML tooling that otherwise looks "local."
 
 ---
 
-## Stage D - Running this hands-off with an "agent" (Cowork / scheduled runs)
+## Stage D - Scheduled ingestion: new manuals get indexed automatically
 
-You mentioned wanting an agent to handle this so you can relax. A few
-options, roughly in order of how much setup they need:
+`scripts/watch_and_ingest.py` scans `data/manuals/` for PDFs, and ingests
+only the ones that are new or have changed since last time (it fingerprints
+each file by content hash and records that in
+`<db-path>/_ingest_state.json` - already-ingested, unchanged files are
+skipped every run, so it's always safe to re-run).
 
-- **Simplest:** once the Docker container is running (`restart:
-  unless-stopped` is already set in `docker-compose.yml`), it will
-  automatically restart itself if it crashes or the machine reboots - no
-  agent needed for basic reliability.
-- **Scheduled ingestion:** if new manual PDFs land in `data/manuals/`
-  periodically, I can set up a Claude Code scheduled Routine that
-  automatically runs Stage B's parse+ingest scripts on a timer, so you
-  never have to run them by hand.
-- **Cowork monitoring:** if you want a Claude session watching this
-  project (e.g. re-running tests when you push changes, or checking the
-  server's `/health` endpoint periodically and alerting you if it's
-  down), that's a good fit for a scheduled Claude Code Routine too.
+It's a **one-shot script**, not a background daemon - you point your OS's
+own scheduler at it (cron, or Windows Task Scheduler) to run it every N
+minutes. This was a deliberate choice over a "watch the folder forever"
+daemon: nothing to babysit, nothing that needs restarting after a reboot,
+and if it fails once, the next scheduled run just picks up where it left
+off (failed files are logged and retried next time; successful ones are
+never re-processed).
 
-Tell me which of these (if any) you want, and I'll set it up as its own
-confirmed stage - I didn't want to configure anything that runs
-autonomously without you explicitly signing off on it first.
+Since your manuals land on your own machine/server rather than in this
+GitHub repo, this can't run as a cloud-based Claude Routine - it needs to
+run locally where the files actually are. Pick the setup that matches how
+you're running the app:
+
+### Option 1 - Running the app directly with Python (Stage A), not Docker
+
+Test it manually first:
+
+```bash
+python scripts/watch_and_ingest.py \
+    --manuals-dir data/manuals \
+    --db-path ./aviation_vector_db \
+    --aircraft-model Airbus-A320 \
+    --log-file logs/ingest.log
+```
+
+Then schedule it:
+
+**Linux / macOS (cron):** run `crontab -e` and add a line to run it every
+15 minutes (adjust the path to wherever you cloned this project):
+
+```
+*/15 * * * * cd /full/path/to/aviation_rag_project && /full/path/to/aviation_rag_project/.venv/bin/python scripts/watch_and_ingest.py --log-file logs/ingest.log >> logs/cron.log 2>&1
+```
+
+**Windows (Task Scheduler):** create a Basic Task -> Trigger: "Repeat task
+every 15 minutes" -> Action: "Start a program" ->
+Program: `C:\full\path\to\aviation_rag_project\.venv\Scripts\python.exe`,
+Arguments: `scripts\watch_and_ingest.py --log-file logs\ingest.log`,
+Start in: `C:\full\path\to\aviation_rag_project`.
+
+### Option 2 - Running the app via Docker (Stage C)
+
+The container already has `scripts/` baked in and its `aviation_vector_db`
+volume is the same one the API reads from, so run the script *inside the
+running container* with `docker exec` - this reaches the same writable
+vector-DB volume without needing a second copy of the code or a second
+Python environment on the host:
+
+```bash
+docker exec aviation_rag_api python scripts/watch_and_ingest.py \
+    --manuals-dir /app/data --db-path /app/aviation_vector_db
+```
+
+Schedule that same command with cron (Linux/macOS host) or Task Scheduler
+(Windows host, calling `docker.exe exec ...`) exactly as in Option 1, just
+swapping the command being run. Because `data/` is mounted `:ro` into the
+container, `docker exec` can read new manuals but the container still can't
+modify or delete your source PDFs - only its own vector-DB volume.
+
+**Confirm before moving on:** pick Option 1 or 2 (whichever matches how
+you're actually running the app), drop a real manual PDF into
+`data/manuals/`, run the command manually once to see it get ingested, then
+set up the cron/Task Scheduler entry. Let me know once it's running and
+I'll help verify the schedule is actually firing (e.g. checking
+`logs/ingest.log` after the first scheduled run).
+
+### Beyond this (not built - ask if you want it)
+
+- **Cowork/Claude Routine monitoring**, e.g. a Claude session periodically
+  checking the server's `/health` endpoint and alerting you if it's down,
+  or re-running tests when you push code changes to this repo. This is a
+  different kind of "agent" than the ingestion script above (it would run
+  in the cloud, watching from the outside, rather than doing local
+  filesystem work) - tell me if you want this set up too.
 
 ---
 

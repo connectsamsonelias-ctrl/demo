@@ -24,7 +24,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-import fitz  # PyMuPDF
+import pymupdf
 
 # Matches "ATA 32-21-00" or "32-21-00", optionally with a trailing "-001"
 # unit/subtask suffix. Chapter/section/subject are each 2 digits per the
@@ -44,7 +44,7 @@ ATA_HEADER_PATTERN = re.compile(
 
 def extract_page_text(pdf_path: str) -> list[str]:
     """Returns a list of page texts using PyMuPDF."""
-    doc = fitz.open(pdf_path)
+    doc = pymupdf.open(pdf_path)
     try:
         return [page.get_text() for page in doc]
     finally:

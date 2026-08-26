@@ -41,6 +41,7 @@ ONNXMiniLM_L6_V2()(['warm up the embedding model cache'])"
 USER root
 
 COPY --chown=appuser:appuser app ./app
+COPY --chown=appuser:appuser scripts ./scripts
 
 RUN mkdir -p /app/aviation_vector_db /app/data && chown -R appuser:appuser /app
 
