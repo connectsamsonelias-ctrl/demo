@@ -18,6 +18,9 @@ export default function HomePage() {
         <a href="/creator/dashboard" className="underline">
           Creator dashboard
         </a>
+        <a href="/marketplace" className="underline">
+          Browse marketplace
+        </a>
       </div>
     </div>
   );

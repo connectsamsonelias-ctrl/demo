@@ -1,11 +1,12 @@
 # AI Knowledge Licensing Platform — Repository Foundation
 
-This covers **Milestones 1–8**: application skeleton, full core data
+This covers **Milestones 1–9**: application skeleton, full core data
 model, authentication, the role/permission system, the creator profile,
-content submission, the AI Knowledge Audit, and the creator dashboard —
-including the minimum browser-reachable UI (sign up/in, profile edit,
-content submission) needed to actually demo that flow. No marketplace,
-payments, licensing workflow, or buyer onboarding is implemented yet.
+content submission, the AI Knowledge Audit, the creator dashboard
+(including the minimum browser-reachable UI needed to demo that flow),
+and the public marketplace (browse + asset detail, no search/filters
+yet — that's Milestone 10). No payments, licensing workflow, or buyer
+onboarding is implemented yet.
 See `../docs/AI_KNOWLEDGE_LICENSING_SPECIFICATION.md` (repo root) for the
 full product/technical review and roadmap.
 
@@ -26,6 +27,7 @@ app/
   creator/dashboard/           Server Component (Milestone 8) — real content+audit data via
                               direct lib calls; licenses/requests/earnings are honest
                               placeholders (those domains don't exist yet)
+  marketplace/, marketplace/[id]/  Public Server Components (Milestone 9) — no auth
   api/health/            DB connectivity sanity check only
   api/auth/[...nextauth]/ NextAuth's own endpoints (csrf, callback/credentials,
                          signout, session, providers)
@@ -34,6 +36,8 @@ app/
   api/creator/profile/    GET/PATCH — creator's own profile (create-or-update)
   api/creator/content/    GET/POST — list/submit content; [id]/ GET/PATCH one item
   api/creator/content/[id]/audit/  GET/POST — request/check the Knowledge Audit
+  api/creator/content/[id]/listing/  POST/DELETE — list/unlist on the marketplace
+  api/marketplace/, api/marketplace/[id]/  GET, public — browse/detail
 lib/
   env.ts                 Validated, typed environment variable access
   db/pool.ts               Postgres connection pool + query/withTransaction
@@ -42,6 +46,11 @@ lib/
   creator/content.ts         contentSubmissionSchema/contentUpdateSchema,
                             createContentItem, list/get/updateContentItem
   creator/audit.ts           requestAudit / getLatestAudit (enqueues jobs, never calls AI inline)
+  creator/listing.ts          listContentOnMarketplace / unlistContentFromMarketplace —
+                             the minimal SUBMITTED->LISTED->WITHDRAWN transition (Milestone 9)
+  marketplace.ts               Public reads (listMarketplaceItems/getMarketplaceItem) —
+                             explicit column lists, never SELECT *, so internal fields
+                             (attestation text, creator user_id) can't leak
   ai/
     types.ts                  KnowledgeAuditResult schema, qualityScoreFrom
     prompt.ts                  System/user prompt builders (Tier 1: metadata only)
@@ -339,6 +348,61 @@ product:
   wording, so this isn't a correctness bug, but the two could drift out
   of sync if either is edited alone).
 
+## Marketplace (Milestone 9)
+
+- **`POST`/`DELETE /api/creator/content/:id/listing`** — a creator opts
+  their own content into/out of the public marketplace.
+  **`GET /api/marketplace`** and **`GET /api/marketplace/:id`** — public,
+  no authentication, matching the spec's "Visitor can browse publicly
+  available listings." No search/filters yet — Screen P03 lists
+  topic/industry/skill/language/quality/rights-type/license-availability
+  filters explicitly, and those are Milestone 10's scope, not this one.
+- **The real scope decision here:** content submitted in Milestone 6 sits
+  at `rights_status = 'SUBMITTED'` forever — nothing advances it, because
+  the full legal state machine (`SUBMITTED` →
+  `AUTHORIZATION_PENDING` → `AUTHORIZED_FOR_PROCESSING` →
+  `ANALYSIS_COMPLETE` → `LICENSING_ELIGIBLE` → `LISTED`) belongs to
+  Milestone 13, and guessing at those intermediate states' legal meaning
+  here would be inventing rights semantics ahead of the milestone that
+  owns them. Instead, `lib/creator/listing.ts` implements one minimal,
+  explicit, clearly-labeled simplification: a creator can move
+  `SUBMITTED` directly to `LISTED`, gated on one condition — a completed
+  Knowledge Audit must already exist — preserving at least that much of
+  the real state machine's intent (`ANALYSIS_COMPLETE` precedes
+  `LICENSING_ELIGIBLE` in the spec). Verified live: listing before an
+  audit exists correctly 422s with a specific message; listing again
+  after already listed also 422s (only one `SUBMITTED → LISTED`
+  transition is legal).
+- **A real, stated gap, not a silently cut corner:** this does **not**
+  check `content_items.status` (the admin content-moderation gate) —
+  because nothing can ever set it to `'approved'` yet; Milestone 18
+  (Admin) doesn't exist. Anything a creator lists today goes live with
+  zero moderation review. This must be closed before real users are
+  onboarded, and is flagged here exactly so it isn't forgotten.
+- **Unlisting** (`LISTED → WITHDRAWN`) exists for symmetry/demo
+  completeness — safe to add now because nothing can be licensed yet
+  (Milestone 13's much harder "must not invalidate an active license"
+  problem doesn't apply until Milestone 14 ships).
+- **Public reads never `SELECT *`.** `lib/marketplace.ts` uses explicit
+  column lists so `content_items.ownership_attestation_text` (a
+  compliance record) and `creator_profiles.user_id` can never leak into
+  a public response — verified by an integration test asserting those
+  keys are literally absent from the returned object, not just that the
+  visible fields look right.
+- **Same enumeration-avoidance pattern as the ownership layer:**
+  `getMarketplaceItem()` returns `null` — and the route 404s — for both
+  "no such content item" and "exists but isn't listed." A public caller
+  can't tell an unlisted item from a nonexistent one. Verified live: a
+  real, existing-but-unlisted item 404s on both the API and the page.
+- **Provenance is shown honestly on the detail page**: when an audit's
+  `input_basis` is `"metadata_only"` (Milestone 7's Tier-1 scope), the
+  asset detail page says so directly to the buyer, rather than letting
+  the audit read as if it analyzed the actual video.
+- Live verification used a directly-inserted `knowledge_assets` row to
+  simulate a completed audit, for the same reason Milestone 7's live
+  check couldn't exercise a real Anthropic call: no `ANTHROPIC_API_KEY`
+  in this environment. Stated plainly, not glossed over.
+
 ## Data model (Milestone 2)
 
 All tables from `docs/AI_KNOWLEDGE_LICENSING_SPECIFICATION.md` Section 4
@@ -461,3 +525,22 @@ the actual `error_message` in red; `/signup` and `/signin` render real
 forms; and a second creator's dashboard shows zero occurrences of the
 first creator's content title. Test data from these live calls was
 deleted from the dev database afterward.
+
+**Milestone 9 specifically:** `npm run typecheck`/`lint`/`test` (62/62,
+unaffected), `npm run test:integration` (57/57 — 44 prior + 13 new,
+covering the audit-required gate, the SUBMITTED→LISTED→WITHDRAWN
+transitions with invalid-transition rejection, cross-creator rejection,
+public queries excluding non-listed items, `getMarketplaceItem`
+returning `null` for both nonexistent and non-listed IDs identically,
+and an explicit assertion that internal-only field names never appear
+in a public response), and `npm run build` (all new routes/pages
+compile, no new migrations needed). Live-verified with `curl`: listing
+before an audit exists 422s with the specific message; listing after a
+simulated completed audit succeeds; both public API endpoints (`curl`
+with no cookie) return the item correctly; both public marketplace pages
+render real server-side HTML including the honest "not the actual video
+content" disclosure; a second, non-listed content item 404s on both the
+public API and page; unlisting immediately empties the public listing
+and 404s the detail endpoint; and a second creator gets 404 attempting
+to list or unlist the first creator's content via either verb. Test data
+from these live calls was deleted from the dev database afterward.

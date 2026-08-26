@@ -6,6 +6,7 @@ import { getLatestAudit, type AuditStatus } from "@/lib/creator/audit";
 import type { ContentItemRow } from "@/lib/db/types";
 import { SignOutButton } from "./sign-out-button";
 import { RunAuditButton } from "./run-audit-button";
+import { ListingButton } from "./listing-button";
 
 export const dynamic = "force-dynamic";
 
@@ -92,6 +93,14 @@ export default async function CreatorDashboardPage() {
                         <div className="text-sm text-slate-600">
                           Audit {audit.job.status} (attempt {audit.job.attempts})…
                         </div>
+                      )}
+                    </div>
+                    <div className="mt-2">
+                      {item.rights_status === "SUBMITTED" && audit?.job?.status === "succeeded" && (
+                        <ListingButton contentItemId={item.id} mode="list" />
+                      )}
+                      {item.rights_status === "LISTED" && (
+                        <ListingButton contentItemId={item.id} mode="unlist" />
                       )}
                     </div>
                   </li>
