@@ -1,46 +1,54 @@
 # AI Knowledge Licensing Platform — Repository Foundation
 
-This covers **Milestones 1–2** of the AI Knowledge Licensing Platform:
-application skeleton + full core data model. No marketplace, payments, AI
-processing, licensing workflow, or creator/buyer onboarding *routes/UI*
-are implemented yet — Milestone 2 is schema only. See
-`../docs/AI_KNOWLEDGE_LICENSING_SPECIFICATION.md` (repo root) for the
+This covers **Milestones 1–3**: application skeleton, full core data
+model, and authentication. No marketplace, payments, AI processing,
+licensing workflow, or creator/buyer onboarding *UI* is implemented yet.
+See `../docs/AI_KNOWLEDGE_LICENSING_SPECIFICATION.md` (repo root) for the
 full product/technical review and roadmap.
 
 ## Stack
 
 Next.js 14 (App Router) · TypeScript (strict) · Tailwind CSS · PostgreSQL
-(via `pg`, no ORM) · Zod · Vitest.
+(via `pg`, no ORM) · Zod · Vitest · next-auth v4 (Auth.js, credentials +
+JWT sessions).
 
 ## What's here
 
 ```
-app/                  App Router shell: layout, home page, error boundary,
-                       /api/health (DB connectivity sanity check only)
+app/
+  api/health/            DB connectivity sanity check only
+  api/auth/[...nextauth]/ NextAuth's own endpoints (csrf, callback/credentials,
+                         signout, session, providers)
+  api/auth/signup/        Custom: creates a creator/buyer account
+  api/auth/me/            Custom: returns the current session or 401
 lib/
-  env.ts              Validated, typed environment variable access
-  db/pool.ts           Postgres connection pool + query/withTransaction helpers
-  db/types.ts           Hand-written row types mirroring db/migrations/*.sql
-  auth/                Role model, session/auth-provider abstraction,
-                       server-side authorize() guard
-  errors.ts             Typed AppError hierarchy → consistent API error responses
-  validation/           Zod wrapper (parseOrThrow)
-  audit/log.ts          Audit-log write helper (writes to audit_logs table)
+  env.ts                 Validated, typed environment variable access
+  db/pool.ts               Postgres connection pool + query/withTransaction
+  db/types.ts               Hand-written row types mirroring db/migrations/*.sql
+  auth/
+    roles.ts                 Role model (creator/buyer/admin — "visitor" excluded)
+    session.ts                AuthProvider interface + NextAuthProvider (default)
+                             + DevStubAuthProvider (tests/local convenience)
+    authorize.ts               Server-side requireRole()/requireSession() guards
+    password.ts                 scrypt hash/verify (no bcrypt dependency)
+    credentials.ts               createUserWithPassword / verifyCredentials
+    next-auth-options.ts          NextAuth config (Credentials provider, JWT)
+  errors.ts               Typed AppError hierarchy → consistent API error responses
+  validation/               Zod wrapper (parseOrThrow)
+  audit/log.ts               Audit-log write helper (writes to audit_logs table)
+  rate-limit.ts              In-memory fixed-window limiter (single-instance only)
   rights/ payments/ ai/ search/   Reserved, not implemented (see each README)
-workers/               Reserved for background job workers (not implemented)
+middleware.ts             Rate-limits POST /api/auth/* by IP
+workers/                 Reserved for background job workers (not implemented)
 db/
-  migrations/           Plain-SQL migrations + a minimal runner (no ORM) —
-                       the full data model: users, creator/buyer profiles,
-                       content_items, knowledge_assets, licensing_terms,
-                       access_requests, licenses, transactions, audit_logs,
-                       content_processing_jobs
-  schema/ seeds/         Reserved for later milestones
+  migrations/               Plain-SQL migrations + a minimal runner (no ORM)
+  schema/ seeds/             Reserved for later milestones
 tests/
-  unit/                 Vitest unit tests, DB-independent (`npm test`)
-  integration/           Vitest tests against a real Postgres
-                       (`npm run test:integration`, after `npm run migrate`)
-  e2e/                   Reserved for later milestones
-docs/decisions/         Open architecture/business decisions log
+  unit/                     Vitest unit tests, DB-independent (`npm test`)
+  integration/               Vitest tests against a real Postgres
+                            (`npm run test:integration`, after `npm run migrate`)
+  e2e/                       Reserved for later milestones
+docs/decisions/            Open architecture/business decisions log
 ```
 
 ## Setup
@@ -48,7 +56,7 @@ docs/decisions/         Open architecture/business decisions log
 Requires Node.js 20+ and a PostgreSQL instance.
 
 ```bash
-cp .env.example .env.local   # set DATABASE_URL
+cp .env.example .env.local   # set DATABASE_URL and NEXTAUTH_SECRET
 npm install
 npm run migrate              # applies db/migrations/*.sql
 npm run dev                  # http://localhost:3000
@@ -67,10 +75,35 @@ npm run dev                  # http://localhost:3000
 | `npm run test:integration` | Run schema/DB tests (requires `DATABASE_URL` + migrations applied) |
 | `npm run migrate` | Apply pending SQL migrations |
 
+## Authentication (Milestone 3)
+
+- **Auth.js via `next-auth@4` (stable), not the v5 beta.** See
+  `docs/decisions/0001-auth-provider.md` for the full reasoning, including
+  why the spec's literal `POST /api/auth/login` / `POST /api/auth/logout`
+  map onto NextAuth's own `POST /api/auth/callback/credentials` and
+  `POST /api/auth/signout` rather than custom routes (v4 has no
+  server-callable `signIn()`/`signOut()` — that's v5-only).
+- **`POST /api/auth/signup`** accepts only `role: "creator" | "buyer"` —
+  an admin account can never be created through public signup.
+- **`GET /api/auth/me`** wraps the session abstraction from Milestone 1
+  (`lib/auth/session.ts`) — proving that design choice paid off:
+  `NextAuthProvider` now implements the same `AuthProvider` interface
+  `DevStubAuthProvider` did, and nothing in `lib/auth/authorize.ts` or its
+  callers had to change.
+- **Passwords:** Node's built-in `scrypt`, salted, constant-time compared.
+- **Failure responses are deliberately uninformative:** wrong password,
+  unknown email, and a suspended account all produce the same result
+  (null / generic `CredentialsSignin`), so a caller can't enumerate which
+  emails have accounts or which are suspended.
+- **Rate limiting:** all `POST /api/auth/*` requests are limited to 10/min
+  per IP via `middleware.ts` — in-memory, so it only protects a single
+  running instance; revisit with a shared store before multi-instance
+  deployment.
+
 ## Data model (Milestone 2)
 
 All tables from `docs/AI_KNOWLEDGE_LICENSING_SPECIFICATION.md` Section 4
-are now in `db/migrations/004`–`011`. Notable decisions made while
+are in `db/migrations/004`–`012`. Notable decisions made while
 translating the spec into an actual schema (none of these were pinned
 down explicitly in the source documents):
 
@@ -92,6 +125,12 @@ down explicitly in the source documents):
   spec's rule that a creator withdrawal (or any deletion) must never be
   able to silently destroy an active contractual license — verified by an
   integration test that a delete attempt is actually rejected.
+- **`audit_logs.actor_id` is `ON DELETE SET NULL`** (fixed in migration
+  013, after Milestone 3's integration tests caught the original
+  migration 002 leaving it at the implicit `RESTRICT` — which would have
+  made it impossible to ever delete a user once they had any audit log
+  entry, including their own signup record). The audit trail must survive
+  the actor being removed.
 - **`transactions.payment_reference` has a unique partial index** (unique
   when non-null) so a provider webhook can be matched back to exactly one
   transaction, while a not-yet-charged (`pending`) transaction can still
@@ -108,10 +147,6 @@ down explicitly in the source documents):
 - **No ORM.** Raw `pg` + hand-written SQL migrations, per the project's
   "prefer simple, boring, reliable systems" principle. Revisit only if
   this becomes a real maintenance burden.
-- **Auth is an interface, not a real provider yet.** `DevStubAuthProvider`
-  reads a session from a request header and refuses to run outside
-  development/test. See `docs/decisions/0001-auth-provider.md` — the real
-  provider is an open decision, gating Milestone 3.
 - **No background-job runner yet.** `workers/` exists as a placeholder;
   a polling worker over `content_processing_jobs` lands starting
   Milestone 7.
@@ -119,6 +154,7 @@ down explicitly in the source documents):
 ## Manual configuration required
 
 - A running PostgreSQL database and its `DATABASE_URL`.
+- `NEXTAUTH_SECRET` — generate with `openssl rand -base64 32`.
 - Everything else in `.env.example` is commented out — those are for
   later milestones (object storage, payments, AI provider) once those
   business decisions are made.
@@ -127,12 +163,22 @@ down explicitly in the source documents):
 
 All of the following were actually run against this exact code (not just
 reviewed): `npm install`, `npm run typecheck`, `npm run lint`, `npm test`
-(12/12 unit tests passing), `npm run build`. Against a real local
-PostgreSQL 16 instance: `npm run migrate` (all 11 migrations applied,
-including forward-migrating from Milestone 1's existing `users`/
-`audit_logs` tables; a second run correctly skipped everything —
-idempotency verified), `npm run test:integration` (7/7 passing, covering
-cascade-on-delete, both financial CHECK constraints, the RESTRICT-not-
-CASCADE license backstop, the unique payment-reference index, and the
-`updated_at` trigger), and a live `npm run dev` server with
-`GET /api/health` returning `{"status":"ok"}` from a real DB round trip.
+(20/20 unit tests passing), `npm run build`. Against a real local
+PostgreSQL 16 instance: `npm run migrate` (all 13 migrations applied,
+forward-migrating cleanly from prior milestones' state; idempotent on a
+second run), `npm run test:integration` (13/13 passing — schema
+constraints plus the credentials layer: hashed-password storage, audit
+log on signup, duplicate-email rejection, correct/wrong-password/
+unknown-email/suspended-account outcomes).
+
+A live `npm run dev` server was also driven through the full HTTP
+lifecycle with `curl`, not just the test suite: signup → NextAuth CSRF +
+`POST /api/auth/callback/credentials` login → session cookie issued →
+`GET /api/auth/me` returns the session → wrong-password login correctly
+rejected → duplicate-email signup correctly rejected with 409 →
+`role: "admin"` signup correctly rejected with 422 → `POST
+/api/auth/signout` clears the cookie → `GET /api/auth/me` correctly
+returns to 401 → and the rate limiter was confirmed live (12 rapid
+`POST /api/auth/*` requests, first 10 succeeded, remainder 429). Test
+data created by these live curl calls was deleted from the dev database
+afterward.

@@ -9,6 +9,8 @@ import { z } from "zod";
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
+  // Signs session JWTs — see .env.example for how to generate one.
+  NEXTAUTH_SECRET: z.string().min(32, "NEXTAUTH_SECRET must be at least 32 characters"),
 });
 
 export type Env = z.infer<typeof envSchema>;

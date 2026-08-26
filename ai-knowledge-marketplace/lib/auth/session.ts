@@ -1,3 +1,6 @@
+import { getToken } from "next-auth/jwt";
+import type { NextRequest } from "next/server";
+import { getEnv } from "@/lib/env";
 import type { Role } from "@/lib/auth/roles";
 
 export interface Session {
@@ -39,7 +42,24 @@ export class DevStubAuthProvider implements AuthProvider {
   }
 }
 
-let provider: AuthProvider = new DevStubAuthProvider();
+/**
+ * Reads the NextAuth-issued JWT session cookie. In practice `request` is
+ * always a NextRequest here (every real caller is a Next.js Route
+ * Handler); the interface is typed against the plain Web `Request` so
+ * lib/auth/authorize.ts and its tests don't depend on Next.js types.
+ */
+export class NextAuthProvider implements AuthProvider {
+  async getSession(request: Request): Promise<Session | null> {
+    const token = await getToken({
+      req: request as unknown as NextRequest,
+      secret: getEnv().NEXTAUTH_SECRET,
+    });
+    if (!token) return null;
+    return { userId: token.userId, email: token.email as string, role: token.role };
+  }
+}
+
+let provider: AuthProvider = new NextAuthProvider();
 
 export function setAuthProvider(p: AuthProvider): void {
   provider = p;
