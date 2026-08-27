@@ -5,6 +5,7 @@ import { listContentItemsForCreator } from "@/lib/creator/content";
 import { getLatestAudit, type AuditStatus } from "@/lib/creator/audit";
 import { listAccessRequestsForCreator } from "@/lib/creator/requests";
 import { listLicensesForCreator } from "@/lib/creator/licenses";
+import { getEarningsSummaryForCreator, listEarningsForCreator } from "@/lib/creator/earnings";
 import type { ContentItemRow } from "@/lib/db/types";
 import { SignOutButton } from "./sign-out-button";
 import { RunAuditButton } from "./run-audit-button";
@@ -15,11 +16,13 @@ export const dynamic = "force-dynamic";
 
 /**
  * Screen C06 (Creator Dashboard). Content assets + Audit results +
- * Requests + Licenses are real, queried directly (Server Component ->
- * lib call, no self-fetch round trip). Earnings remains a placeholder —
- * that's Milestone 16, and every license here is still `pending_payment`
- * (Milestone 15 owns activation) — faking payout numbers from nothing
- * would misrepresent what's actually been built.
+ * Requests + Licenses + Earnings are all real, queried directly (Server
+ * Component -> lib call, no self-fetch round trip). Earnings (Milestone
+ * 16) shows what's been earned from real `transactions`
+ * (Milestone 15) — it does not move any money to the creator. Actual
+ * payout execution (bank transfer, Stripe Connect onboarding, KYC/tax
+ * forms) is a separate, still-open business/compliance decision the spec
+ * itself defers, not resolved here.
  */
 export default async function CreatorDashboardPage() {
   const session = await getPageSession();
@@ -32,6 +35,8 @@ export default async function CreatorDashboardPage() {
   let audits: Record<string, AuditStatus> = {};
   let requests: Awaited<ReturnType<typeof listAccessRequestsForCreator>> = [];
   let licenses: Awaited<ReturnType<typeof listLicensesForCreator>> = [];
+  let earningsSummary: Awaited<ReturnType<typeof getEarningsSummaryForCreator>> | null = null;
+  let earningsEntries: Awaited<ReturnType<typeof listEarningsForCreator>> = [];
   if (profile) {
     items = await listContentItemsForCreator(session);
     const entries = await Promise.all(
@@ -40,6 +45,8 @@ export default async function CreatorDashboardPage() {
     audits = Object.fromEntries(entries);
     requests = await listAccessRequestsForCreator(session);
     licenses = await listLicensesForCreator(session);
+    earningsSummary = await getEarningsSummaryForCreator(session);
+    earningsEntries = await listEarningsForCreator(session);
   }
 
   return (
@@ -163,14 +170,35 @@ export default async function CreatorDashboardPage() {
         </section>
       )}
 
-      <section className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2">
-        {["Earnings"].map((label) => (
-          <div key={label} className="rounded border border-dashed border-slate-300 p-4 text-sm text-slate-500">
-            <p className="font-medium text-slate-700">{label}</p>
-            <p className="mt-1">Available once that milestone ships.</p>
+      {profile && (
+        <section className="mt-8">
+          <h2 className="font-medium">Earnings</h2>
+          <div className="mt-2 rounded border border-slate-200 p-4">
+            <p className="text-2xl font-semibold">
+              ${earningsSummary!.totalEarned} <span className="text-sm font-normal text-slate-500">{earningsSummary!.currency}</span>
+            </p>
+            <p className="text-xs text-slate-500">
+              from {earningsSummary!.transactionCount} succeeded transaction
+              {earningsSummary!.transactionCount === 1 ? "" : "s"}
+            </p>
+            <p className="mt-2 text-xs text-slate-500">
+              This is what you&apos;ve earned, not a payout — bank transfers aren&apos;t built yet.
+            </p>
           </div>
-        ))}
-      </section>
+          {earningsEntries.length > 0 && (
+            <ul className="mt-3 flex flex-col gap-2">
+              {earningsEntries.map((e) => (
+                <li key={e.id} className="rounded border border-slate-200 p-3 text-sm">
+                  <p className="font-medium">{e.contentItemTitle}</p>
+                  <p className="text-xs text-slate-500">
+                    from {e.buyerOrganizationName} · your share ${e.creator_amount} {e.currency} · status: {e.status}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
     </div>
   );
 }

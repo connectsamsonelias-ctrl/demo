@@ -761,6 +761,34 @@ product:
   (`transaction_status = 'refunded'` already exists in the schema) also
   aren't wired to any code path yet.
 
+## Creator earnings (Milestone 16)
+
+- **A read-only earnings ledger, no new schema.** `lib/creator/earnings.ts`
+  builds entirely on `transactions` (Milestone 15) joined through
+  `licenses.creator_id` — `getEarningsSummaryForCreator` (total earned +
+  transaction count, `succeeded` only) and `listEarningsForCreator` (the
+  full per-transaction ledger, every status, not just `succeeded` — a
+  creator can see pending/failed activity too, not only what cleared).
+- **Deliberately does not move any money.** The spec's own item list
+  flags real creator payout mechanics — a bank account, Stripe Connect
+  account onboarding, KYC, tax forms — as depending on a business/
+  compliance decision that was never made (only the *buyer-payment*
+  provider was confirmed, in Milestone 15). Inventing a payout/KYC flow
+  here would mean guessing at a real compliance surface nobody signed off
+  on. This milestone shows a creator what they've earned; actual
+  disbursement stays explicitly out of scope, not silently skipped — the
+  dashboard says so directly ("This is what you've earned, not a payout
+  — bank transfers aren't built yet").
+- **A known, explicitly-flagged gap**: `totalEarned` does not subtract
+  refunded transactions. No code path sets `transaction_status =
+  'refunded'` anywhere yet (noted as unwired in the Milestone 15
+  section) — once one exists, this sum needs to exclude/reverse those,
+  but that's real future work, not solved here.
+- **`GET /api/creator/earnings`** returns both the summary and the full
+  ledger in one call; the creator dashboard's old "Earnings" placeholder
+  card is now the real summary plus a per-transaction list (content
+  title, buyer org, the creator's own share, status).
+
 ## Data model (Milestone 2)
 
 All tables from `docs/AI_KNOWLEDGE_LICENSING_SPECIFICATION.md` Section 4
@@ -1045,3 +1073,22 @@ dashboards rendered the real `active` status server-side. Test data
 (including the transaction and license rows, respecting the same FK
 order as the automated tests) was deleted from the dev database
 afterward.
+
+**Milestone 16 specifically:** `npm run typecheck`/`lint`/`test`
+(106/106, unchanged — this milestone adds no new input schema to unit-
+test), `npm run test:integration` (109/109 — 104 prior + 5 new, covering
+a zero-transaction creator, the 80% share summed correctly across
+multiple paid licenses, per-entry content/buyer/share details, cross-
+creator scoping, and a failed transaction correctly excluded from the
+total while still appearing in the ledger), `npm run migrate` (no new
+migration — pure read logic over `transactions`/`licenses`), and `npm
+run build` all pass with the new route compiled in. Live-verified end to
+end with `curl` and a real running server: a fresh creator's earnings
+were exactly `{"totalEarned": "0.00", "transactionCount": 0}` before any
+sale; after the full submit → list → price ($400) → request → approve →
+pay chain (the last step a genuinely Stripe-signed webhook, same
+real-SDK-signing approach as Milestone 15), `GET /api/creator/earnings`
+correctly returned `totalEarned: "320.00"` (80% of $400) with one ledger
+entry showing the buyer org and the creator's own share; and the creator
+dashboard rendered both the summary and the entry server-side. Test data
+was deleted from the dev database afterward.
