@@ -198,35 +198,27 @@ connected machine, then move only the finished image (no source code, no
    (`docker compose up` without `--build` uses the already-loaded image
    rather than trying to build - so this step never touches the network.)
 
-### Extra guardrail: the container's network can't reach out, even if something tries to
+### Tried and reverted: `internal: true` on the network
 
-`docker-compose.yml`'s network is now configured with `internal: true`.
-This removes that Docker network's route to the outside world - so even
-if a bug in the app, or a compromised dependency, tried to make an
-outbound call, Docker itself would block it at the network layer. This is
-a second layer of defense on top of - not a substitute for - your actual
-air-gapped network having no route out.
+An earlier version of this file added `internal: true` to the app's
+Docker network as an extra guardrail - the idea being that even if a bug
+or a compromised dependency tried to make an outbound call, Docker itself
+would block it. Sound idea, but **tested live on Docker Desktop for
+Windows (WSL2 backend) and found it silently breaks published port
+forwarding on that platform**: `docker ps` showed the container's port as
+`8000/tcp` instead of `0.0.0.0:8000->8000/tcp`, and `curl
+http://localhost:8000/health` from the host failed to connect entirely.
+(On native Linux Docker, `internal: true` behaves as documented and
+doesn't affect port publishing - this is specifically a Docker
+Desktop/WSL2 interaction.)
 
-Note `internal: true` does **not** block the host from reaching the
-container: the `ports: 8000:8000` mapping is a separate host-to-container
-forwarding rule that still works normally, so `/health` and `/query` are
-still reachable from the host machine exactly as before.
-
-**Verify this yourself** once you've built the image (this sandbox's own
-network policy blocked me from pulling the Python base image to test it
-live, so please confirm this on your machine):
-
-```bash
-docker compose -f docker/docker-compose.yml --env-file .env up -d
-# from the host - this should still work:
-curl http://localhost:8000/health
-# from inside the container - this should FAIL (no route to the internet):
-docker exec aviation_rag_api python -c "import urllib.request; urllib.request.urlopen('https://google.com', timeout=5)"
-```
-
-The second command should raise a connection/network error. If it
-succeeds instead, something is misconfigured - let me know and we'll dig
-in.
+Removed rather than kept "just in case," because the app already makes
+zero outbound calls of its own regardless (embedding model baked into
+the image, telemetry disabled - see below) - so this setting was pure
+extra-credit defense that ended up costing the one thing that actually
+matters: being reachable at all. If you want genuine network-level
+egress blocking for a production air-gapped deployment, enforce it at
+the host/network firewall, not in this compose file.
 
 ---
 

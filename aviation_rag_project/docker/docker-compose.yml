@@ -37,19 +37,21 @@ services:
 networks:
   aviation_rag_net:
     driver: bridge
-    # internal: true removes this network's route to the outside world -
-    # containers on it cannot reach the internet even if something in the
-    # app (a bug, a compromised dependency) tries to. This does NOT block
-    # the host from reaching the container: the `ports:` mapping above is
-    # a separate host->container forwarding rule, unaffected by this
-    # setting, so `curl http://localhost:8000/health` from the host still
-    # works exactly as before.
-    #
-    # Note: air-gapping itself is a property of the HOST machine/network
-    # having no physical or logical route to the internet - that has to
-    # be enforced by your infrastructure, not by this file. This setting
-    # is a second layer of defense on top of that, not a substitute for it.
-    internal: true
+    # An earlier version of this file set `internal: true` here as an
+    # extra guardrail against outbound calls. Tested live on Docker
+    # Desktop for Windows (WSL2 backend) and confirmed it silently breaks
+    # published port forwarding on that platform - `docker ps` showed the
+    # container's port as `8000/tcp` instead of `0.0.0.0:8000->8000/tcp`,
+    # so `curl http://localhost:8000/health` from the host failed to
+    # connect entirely. (This is a Docker Desktop/WSL2-specific
+    # interaction - the setting behaves as documented on native Linux
+    # Docker, where port publishing is independent of it.) Removed rather
+    # than kept "just in case": the app already makes zero outbound calls
+    # on its own (embedding model baked into the image, telemetry
+    # disabled - see below), so this was pure extra-credit defense with
+    # no compensating benefit once it broke inbound access. Real egress
+    # blocking for a genuinely air-gapped deployment belongs at the
+    # host/network firewall level, not in this compose file.
 
 volumes:
   chroma_data:
