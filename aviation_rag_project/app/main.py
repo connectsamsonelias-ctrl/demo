@@ -11,11 +11,14 @@ number's snag history, and returns a structured dossier - or a hardcoded
 
 from __future__ import annotations
 
+import json
 import logging
 import os
+from pathlib import Path
 
-from fastapi import Depends, FastAPI
-from fastapi.responses import JSONResponse
+from fastapi import Depends, FastAPI, Request
+from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.templating import Jinja2Templates
 
 from .models import MaximoWorkOrderQuery, QueryResponse
 from .rag_engine import AdvancedAviationRAG
@@ -33,6 +36,8 @@ app = FastAPI(
     version="0.1.0",
 )
 
+templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
+
 rag_system: AdvancedAviationRAG | None = None
 
 
@@ -49,6 +54,23 @@ def load_rag_system() -> None:
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok"}
+
+
+@app.get("/", response_class=HTMLResponse)
+def chat_ui(request: Request) -> HTMLResponse:
+    """
+    Serves the browser-based chat UI. The API key is read server-side from
+    the environment and injected into the page here - it never needs to be
+    typed or seen by the person using the browser. This page is meant for
+    trusted local/LAN use only (it has no login of its own); the /query
+    endpoint it calls still enforces the API key underneath.
+    """
+    api_key = os.environ.get("AVIATION_RAG_API_KEY", "")
+    return templates.TemplateResponse(
+        request=request,
+        name="index.html",
+        context={"api_key_json": json.dumps(api_key)},
+    )
 
 
 @app.post("/query", response_model=QueryResponse, dependencies=[Depends(require_api_key)])

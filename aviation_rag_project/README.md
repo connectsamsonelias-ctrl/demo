@@ -15,6 +15,8 @@ aviation_rag_project/
     main.py           <- the FastAPI web server (the "front door")
     models.py          <- defines what a valid request/response looks like
     security.py         <- checks the API key on every request
+    templates/
+      index.html          <- the browser chat page a person actually uses
   scripts/
     parse_ata_chapters.py   <- reads a PDF, finds "ATA 32-21-00" style headers
     ingest_parsed_chunks.py  <- loads those parsed chunks into the database
@@ -334,6 +336,51 @@ I'll help verify the schedule is actually firing (e.g. checking
 
 ---
 
+## Stage E - A chat window instead of typed commands
+
+Everything up to this point is accessed by typing `curl` commands - fine
+for testing, not something to hand a non-technical person. `/` now serves
+a real browser chat page: type a question, get an answer, no terminal
+involved. It calls the same `/query` endpoint everything else uses -
+nothing about the API changed, this is purely a front door on top of it.
+
+**Using it:** with the container running (Stage C), open a browser to
+**http://localhost:8000** (or `http://<the machine's IP>:8000` from
+another device on the same network). Set the tail number, aircraft type,
+and ATA chapter on the left, type a question, hit Ask (or Enter).
+
+The API key is injected into the page automatically by the server (read
+from `AVIATION_RAG_API_KEY` in `.env`) - whoever uses the browser page
+never sees or types it. This page has no login of its own, so treat it
+as trusted-local/LAN-only, same as the API itself.
+
+### Making it feel like "just an app" (auto-start, no manual Docker steps)
+
+The container already has `restart: unless-stopped` set, so once it's
+running once, Docker will keep it running / bring it back after a crash
+or machine restart **as long as Docker Desktop itself is running.**
+Docker Desktop does not start on its own by default - to get an
+open-laptop-and-it's-just-there experience:
+
+1. Open **Docker Desktop** → **Settings** → **General**.
+2. Check **"Start Docker Desktop when you sign in to your computer."**
+3. Click **Apply**.
+
+From then on: turn on the laptop → sign in → Docker Desktop starts
+quietly in the background (a tray icon, no window) → the container starts
+with it → the app is reachable at `http://localhost:8000` a minute or two
+later, without anyone running a single command.
+
+**Worth being honest about:** this is not literally invisible the way a
+phone app is - Docker Desktop is a real background service with its own
+tray icon and a meaningful RAM footprint (worth watching on lower-spec
+hardware). But the actual day-to-day experience collapses to: turn on
+laptop, wait a bit, open one browser bookmark. A desktop shortcut/browser
+bookmark pointed at `http://localhost:8000` completes that picture - no
+`.exe` installer, no typed commands, just a link to click.
+
+---
+
 ## Tests
 
 ```bash
@@ -343,7 +390,10 @@ pytest tests/ -v
 ## Next steps you may want (not built yet - ask if you want any of these)
 
 - Wiring `/query`'s returned dossier into an actual local LLM (e.g. Ollama
-  running Llama-3-8B) instead of returning the raw prompt text.
+  running Llama-3-8B, or a locally-hosted BharatGen Param-1/Param2 model)
+  instead of returning the raw retrieved text as-is. The UI already talks
+  to `/query` as a black box, so this plugs in as a backend-only change -
+  the chat page above won't need to be touched or rebuilt for it.
 - Swapping the `data/snag_history.json` mock for a real Maximo Integration
   Framework (MIF) call or a local SQLite mirror.
 - Hybrid BM25 + vector search and a cross-encoder reranker, per the
