@@ -124,6 +124,21 @@ export async function listMarketplaceItems(filters: MarketplaceFilters = {}): Pr
   );
 }
 
+/**
+ * Public-safe subset of licensing_terms — deliberately excludes
+ * creator_share_percent/platform_share_percent (the commission split is
+ * an internal detail between the platform and the creator, never shown
+ * to a buyer) and id/content_item_id/timestamps (not useful here).
+ */
+export interface PublicLicensingTerms {
+  allowedUseTypes: unknown[];
+  licenseDuration: string | null;
+  geographicScope: string | null;
+  commercialStatus: string;
+  pricingModel: string | null;
+  basePrice: string | null;
+}
+
 export interface MarketplaceListingDetail extends MarketplaceListing {
   rightsStatus: string;
   sourcePlatform: string;
@@ -133,6 +148,8 @@ export interface MarketplaceListingDetail extends MarketplaceListing {
   potentialUseCases: unknown[];
   /** Honest about what the audit actually analyzed — see Milestone 7's Tier-1/metadata-only scope note. */
   provenanceBasis: string | null;
+  /** null when the creator hasn't set licensing terms yet (Milestone 14) — a real, distinct state from "free"/"contact us", shown as such. */
+  licensingTerms: PublicLicensingTerms | null;
 }
 
 /** Returns null for both "no such content item" and "exists but not listed" — a public caller can't distinguish the two, same enumeration-avoidance reasoning used throughout this project. */
@@ -146,6 +163,12 @@ export async function getMarketplaceItem(contentItemId: string): Promise<Marketp
       entities: unknown[] | null;
       structuredContent: { potentialUseCases?: unknown[] } | null;
       provenance: { input_basis?: string } | null;
+      allowedUseTypes: unknown[] | null;
+      licenseDuration: string | null;
+      geographicScope: string | null;
+      commercialStatus: string | null;
+      pricingModel: string | null;
+      basePrice: string | null;
     }
   >(
     `SELECT
@@ -164,6 +187,12 @@ export async function getMarketplaceItem(contentItemId: string): Promise<Marketp
        ka.entities AS "entities",
        ka.structured_content AS "structuredContent",
        ka.provenance AS "provenance",
+       lt.allowed_use_types AS "allowedUseTypes",
+       lt.license_duration AS "licenseDuration",
+       lt.geographic_scope AS "geographicScope",
+       lt.commercial_status AS "commercialStatus",
+       lt.pricing_model AS "pricingModel",
+       lt.base_price AS "basePrice",
        ci.created_at AS "createdAt"
      FROM content_items ci
      JOIN creator_profiles cp ON cp.id = ci.creator_id
@@ -174,6 +203,7 @@ export async function getMarketplaceItem(contentItemId: string): Promise<Marketp
        ORDER BY created_at DESC
        LIMIT 1
      ) ka ON true
+     LEFT JOIN licensing_terms lt ON lt.content_item_id = ci.id
      WHERE ci.id = $1 AND ci.rights_status = 'LISTED'`,
     [contentItemId]
   );
@@ -196,5 +226,15 @@ export async function getMarketplaceItem(contentItemId: string): Promise<Marketp
     entities: row.entities ?? [],
     potentialUseCases: row.structuredContent?.potentialUseCases ?? [],
     createdAt: row.createdAt,
+    licensingTerms: row.commercialStatus
+      ? {
+          allowedUseTypes: row.allowedUseTypes ?? [],
+          licenseDuration: row.licenseDuration,
+          geographicScope: row.geographicScope,
+          commercialStatus: row.commercialStatus,
+          pricingModel: row.pricingModel,
+          basePrice: row.basePrice,
+        }
+      : null,
   };
 }

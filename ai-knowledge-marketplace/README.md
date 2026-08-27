@@ -958,6 +958,122 @@ product:
   Fixed by setting `fileParallelism: false`; confirmed deterministic
   across two consecutive full runs afterward.
 
+## SEO/launch (Milestone 20)
+
+- **A real bug fixed, not just SEO polish**: `app/marketplace/[id]/page.tsx`
+  still said "Pricing and full licensing terms are available once that
+  milestone ships" — five milestones after Milestone 14 shipped real
+  `licensing_terms`. `lib/marketplace.ts`'s public read never picked it
+  up. Fixed by joining `licensing_terms` into `getMarketplaceItem`
+  (allowed use types, duration, geographic scope, commercial status,
+  pricing model, base price — **never** `creator_share_percent`/
+  `platform_share_percent`, the commission split, which stays internal
+  and is never shown to a buyer). Verified live: a real $599 price with
+  `flat_fee` pricing rendered on the real page, and the stale placeholder
+  string is gone, grep-verified.
+- **Real SEO metadata**, not boilerplate: `app/layout.tsx` gets a title
+  template (`"%s | AI Knowledge Licensing Platform"`) plus Open Graph/
+  Twitter defaults every page inherits; `/marketplace` gets static
+  metadata; every `/marketplace/[id]` page gets real `generateMetadata`
+  sourced from that listing's own title/description — verified live that
+  a real listing's `<title>` and `og:description` reflect its actual
+  content, not the site default.
+- **`app/sitemap.ts`** — the landing page, `/marketplace`, and every
+  currently-`LISTED` item (public pages only; `/signin`, `/signup`, and
+  every `/creator`/`/buyer`/`/admin` page are excluded on purpose).
+  Revalidates hourly (`export const revalidate = 3600`) rather than only
+  at build time, so new listings eventually appear without a full
+  redeploy — verified live that a newly-listed item was **not** yet in
+  `sitemap.xml` immediately after listing (expected: the page was
+  statically generated before the item existed, and won't regenerate
+  until the next revalidation window — this is the deliberate ISR
+  tradeoff, not a bug).
+- **`app/robots.ts`** — disallows `/api/`, `/creator/`, `/buyer/`,
+  `/admin/`, `/signin`, `/signup` wholesale (not page-by-page), so a new
+  private route added later is excluded by default rather than
+  accidentally crawlable. Points at the real sitemap URL.
+- **A real favicon** (`app/icon.svg`) — closes a small gap Milestone 18's
+  live verification noticed in passing (`/favicon.ico` 404ing) but was
+  out of scope then. Verified live: `200`, `image/svg+xml`.
+- **`NEXT_PUBLIC_SITE_URL`** (`lib/env.ts`'s new `getSiteUrl()`) — the
+  canonical origin used by `metadataBase`, Open Graph URLs, the sitemap,
+  and robots.txt. Optional, falls back to `http://localhost:3000` in
+  local dev; **must** be set to the real deployed origin before launch
+  (same category as `NEXTAUTH_URL`) — verified live with a real
+  configured value (`https://demo.example.com`) producing correctly
+  absolute URLs throughout.
+- **See "Launch checklist" below** for the consolidated list of every
+  `[BUSINESS DECISION]`/`[LEGAL APPROVAL REQUIRED]` item flagged across
+  all 20 milestones that still needs a real decision before this goes in
+  front of real users — this milestone's job was to make the *code*
+  launch-ready, not to resolve those.
+
+## Launch checklist
+
+This is the last of the original 20 milestones. Everything below is a
+real, open item — flagged as it came up, not discovered now — collected
+here so launch readiness lives in one place instead of scattered across
+twenty sections.
+
+**Legal copy that was never drafted** (explicitly deferred to counsel at
+kickoff, stubbed with placeholder/functional text so the MVP has
+*something* concrete rather than a blocking unknown):
+- The ownership attestation text in `lib/creator/content.ts`
+  (`OWNERSHIP_ATTESTATION_TEXT`) — functional, not legally reviewed.
+- Terms of Service / Privacy Policy — no page exists at all. Signup
+  (`app/signup/page.tsx`) does not currently link to either.
+- The specific "granted rights" itemization the kickoff review's Step 2
+  called for alongside the attestation checkbox — only the single
+  checkbox exists, not an itemized list of what's being licensed.
+
+**Business/compliance decisions made as engineering defaults, explicitly
+flagged for revisit, not silently permanent**:
+- Commission split (80% creator / 20% platform, `lib/licensing/commission.ts`)
+  — confirmed with the user for MVP, but "per-license-type variance" was
+  explicitly named as a separate, still-open question.
+- Currency scope — USD-only, worldwide, stated as the smallest reasonable
+  assumption in Milestone 15, never confirmed as a deliberate business
+  choice the way the Stripe decision itself was.
+- Withdrawal-vs-active-license behavior — the kickoff review's own
+  engineering stub (`ACTIVE` licenses always survive withdrawal, no
+  exceptions) is now structurally enforced by `lib/rights/state-machine.ts`,
+  but the stub itself was never legally approved.
+
+**Real functionality that does not exist yet**:
+- Creator payout execution — Milestone 16 built the earnings *ledger*
+  (what's owed), never a mechanism to actually pay a creator (Stripe
+  Connect account onboarding, KYC, tax forms — a real compliance
+  surface, not just an engineering task).
+- Refund handling — `transaction_status = 'refunded'` exists in the
+  schema; no code path ever sets it, and `getEarningsSummaryForCreator`/
+  `getPlatformAnalytics` don't account for what a refund would mean for
+  already-counted totals.
+- YouTube ingestion — every content submission is still creator-typed
+  metadata (title/description/category), never the platform reading a
+  video/its captions directly, per the user's own explicit instruction
+  early in this build ("keep going with creator-submitted metadata for
+  now and revisit it later"). The kickoff review's recommendation (Data
+  API + captions only, not scraping) was never implemented or revisited.
+- Object storage — still fully unconfigured (`.env.example`'s
+  `OBJECT_STORAGE_*` block), because nothing in this build ever needed to
+  store a file; only URLs and creator-typed text exist today.
+- Broader admin "review everything" panels (access requests/licenses/
+  transactions platform-wide) and creator/buyer `verification_status`
+  review's *request* step (an admin can act on any profile, but nothing
+  lets a user proactively request review) — both named explicitly as
+  descoped in Milestones 17/18.
+
+**Infrastructure**:
+- The Milestone 18 dependency audit: 9 `npm audit` findings (1 critical,
+  6 high, 2 moderate), every fix requiring a major version bump (Next.js
+  14→16, Vitest 1→4). Deliberately not force-upgraded — a real, separate
+  migration effort.
+- No error-tracking/observability provider is wired up (Sentry or
+  similar) — `console.error` is the only signal today.
+- `NEXT_PUBLIC_SITE_URL` (this milestone) and `NEXTAUTH_URL` (Milestone
+  3) both need real values in production; both default to
+  `localhost`-shaped values that would be a real bug if deployed as-is.
+
 ## Data model (Milestone 2)
 
 All tables from `docs/AI_KNOWLEDGE_LICENSING_SPECIFICATION.md` Section 4
@@ -1020,9 +1136,16 @@ down explicitly in the source documents):
   fine without it. Only `npm run worker:audit` needs it, and without it
   audit jobs fail closed (status `failed`, a clear `error_message`) —
   they never fabricate a fake result.
-- Everything else in `.env.example` is commented out — those are for
-  later milestones (object storage, payments) once those business
-  decisions are made.
+- `STRIPE_SECRET_KEY`/`STRIPE_WEBHOOK_SECRET` — optional and independent
+  of each other (Milestone 15); without them, checkout creation and
+  webhook verification both fail closed rather than fabricating a
+  payment.
+- `NEXT_PUBLIC_SITE_URL` — optional, defaults to `http://localhost:3000`
+  (Milestone 20); must be the real deployed origin before launch.
+- `OBJECT_STORAGE_*` in `.env.example` is still commented out — nothing
+  in this build ever needed to store a file, so this remains genuinely
+  unconfigured, not just deferred busywork. See "Launch checklist" above
+  for the full list of what's still open.
 
 ## Verification status
 
@@ -1342,3 +1465,30 @@ today's row in the daily-signups table showed the real counts; the
 `/admin/analytics` page rendered the real GMV figure server-side; and a
 non-admin got a real `403` on the API and a `307` redirect on the page.
 Test data was deleted from the dev database afterward.
+
+**Milestone 20 specifically:** `npm run typecheck`/`lint`/`test`
+(106/106, unchanged — no new input schema), `npm run test:integration`
+(144/144 — 142 prior + 2 new covering `licensingTerms: null` before a
+creator sets terms and the real terms — minus the commission split —
+once they do), `npm run migrate` (no new migration — the licensing-terms
+fix is a query change, not a schema change), and `npm run build` all
+pass, with `sitemap.xml`, `robots.txt`, and `icon.svg` all appearing as
+real compiled routes. Live-verified end to end with `curl` against a
+real running server (built with `NEXT_PUBLIC_SITE_URL=https://demo.example.com`
+to confirm absolute-URL generation, not just the localhost fallback):
+`robots.txt` correctly disallowed the private sections and pointed at
+the real sitemap URL; `sitemap.xml` contained the landing page and
+`/marketplace` immediately; `icon.svg` served `200`/`image/svg+xml`; the
+root page's `<title>` and Open Graph tags matched the configured
+site-wide defaults. Then, running the full submit → admin-approve →
+list → set-real-pricing chain: the listing page's `<title>` correctly
+became `"How turbochargers work | AI Knowledge Licensing Platform"`
+(the per-listing `generateMetadata`, not the site default), its
+`og:description` matched the real submitted description, the stale
+"available once that milestone ships" string was confirmed gone
+(grep-verified, count `0`), and the real price (`$599.00 (flat_fee)`)
+rendered on the page. The new listing was confirmed **absent** from
+`sitemap.xml` immediately after listing — expected, not a bug: the
+sitemap route revalidates hourly, and the page had been statically
+generated before the item existed. Test data (including the seeded
+admin) was deleted from the dev database afterward.

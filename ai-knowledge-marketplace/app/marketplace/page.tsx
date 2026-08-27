@@ -1,6 +1,12 @@
+import type { Metadata } from "next";
 import { listMarketplaceItems, marketplaceFiltersSchema } from "@/lib/marketplace";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: "Marketplace",
+  description: "Browse rights-cleared knowledge listed by creators — search by topic, skill, category, and quality.",
+};
 
 /**
  * Screen P03 (Marketplace). Filters submit via a plain GET form — no

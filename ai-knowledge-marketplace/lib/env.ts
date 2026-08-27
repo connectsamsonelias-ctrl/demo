@@ -25,6 +25,12 @@ const envSchema = z.object({
   // confirmed with only this secret configured, even if checkout creation
   // itself is unconfigured.
   STRIPE_WEBHOOK_SECRET: z.string().min(1).optional(),
+  // Milestone 20 (SEO/launch): the canonical public origin, used for
+  // metadataBase, Open Graph URLs, sitemap.xml, and robots.txt. Optional
+  // — falls back to a localhost placeholder so none of those break in
+  // local dev; must be set to the real deployed origin in production
+  // (same "real value needed before launch" category as NEXTAUTH_URL).
+  NEXT_PUBLIC_SITE_URL: z.string().url().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -43,4 +49,9 @@ export function getEnv(): Env {
   }
   cached = parsed.data;
   return cached;
+}
+
+/** Never throws — every caller (metadata, sitemap, robots) needs a usable URL even in local dev with nothing configured. */
+export function getSiteUrl(): string {
+  return getEnv().NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 }

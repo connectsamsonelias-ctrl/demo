@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { query } from "@/lib/db/pool";
 import { createContentItem } from "@/lib/creator/content";
 import { listContentOnMarketplace, unlistContentFromMarketplace, hasCompletedAudit } from "@/lib/creator/listing";
+import { setLicensingTerms } from "@/lib/creator/licensing-terms";
 import { listMarketplaceItems, getMarketplaceItem } from "@/lib/marketplace";
 import { ValidationError, NotFoundError } from "@/lib/errors";
 import type { Session } from "@/lib/auth/session";
@@ -187,5 +188,43 @@ describe("listMarketplaceItems / getMarketplaceItem", () => {
     const listItems = await listMarketplaceItems();
     const listKeys = Object.keys(listItems[0]!);
     expect(listKeys).not.toContain("ownership_attestation_text");
+  });
+
+  it("returns null licensingTerms when the creator hasn't set any yet (Milestone 20 fix)", async () => {
+    const session = await makeCreatorSession();
+    const item = await createContentItem(session, contentInput);
+    await simulateCompletedAudit(item.id);
+    await listContentOnMarketplace(session, item.id);
+
+    const detail = await getMarketplaceItem(item.id);
+    expect(detail!.licensingTerms).toBeNull();
+  });
+
+  it("includes real licensing terms once the creator sets them, excluding the commission split", async () => {
+    const session = await makeCreatorSession();
+    const item = await createContentItem(session, contentInput);
+    await simulateCompletedAudit(item.id);
+    await listContentOnMarketplace(session, item.id);
+    await setLicensingTerms(session, item.id, {
+      allowedUseTypes: ["RAG dataset", "fine-tuning"],
+      licenseDuration: "1 year",
+      geographicScope: "worldwide",
+      commercialStatus: "commercial",
+      pricingModel: "flat_fee",
+      basePrice: 499.99,
+    });
+
+    const detail = await getMarketplaceItem(item.id);
+    expect(detail!.licensingTerms).toEqual({
+      allowedUseTypes: ["RAG dataset", "fine-tuning"],
+      licenseDuration: "1 year",
+      geographicScope: "worldwide",
+      commercialStatus: "commercial",
+      pricingModel: "flat_fee",
+      basePrice: "499.99",
+    });
+    // Commission split is internal — never shown to a public buyer.
+    expect(JSON.stringify(detail)).not.toContain("SharePercent");
+    expect(JSON.stringify(detail)).not.toContain("80.00");
   });
 });
