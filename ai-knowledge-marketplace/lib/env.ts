@@ -16,6 +16,15 @@ const envSchema = z.object({
   // Audit feature needs it, and it fails that one feature closed — not
   // the whole app — when absent. See lib/ai/provider.ts.
   ANTHROPIC_API_KEY: z.string().min(1).optional(),
+  // Optional, same reasoning: checkout creation fails closed (never
+  // fabricates a checkout URL) without it. See lib/payments/provider.ts.
+  STRIPE_SECRET_KEY: z.string().min(1).optional(),
+  // Optional, but independently required from STRIPE_SECRET_KEY: webhook
+  // signature verification fails closed (rejects every webhook, never
+  // processes an unverifiable one) without it — a payment can be
+  // confirmed with only this secret configured, even if checkout creation
+  // itself is unconfigured.
+  STRIPE_WEBHOOK_SECRET: z.string().min(1).optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

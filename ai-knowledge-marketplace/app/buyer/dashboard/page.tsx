@@ -4,17 +4,19 @@ import { getBuyerProfile } from "@/lib/buyer/profile";
 import { listAccessRequestsForBuyer } from "@/lib/buyer/requests";
 import { listLicensesForBuyer } from "@/lib/buyer/licenses";
 import { SignOutButton } from "./sign-out-button";
+import { PayNowButton } from "./pay-now-button";
 
 export const dynamic = "force-dynamic";
 
 /**
- * Screen B05 (Buyer Dashboard). Requests (Milestone 12) and Licenses
- * (Milestone 14) are real. Payments / Downloads / Saved assets remain
- * honest placeholders: Payments is Milestone 15 (every license below is
- * still `pending_payment` until then), "Downloads/access" depends on
- * Payments too, and "Saved assets" specifically has no backing table at
- * all anywhere in the schema — that would be a new bookmarking feature,
- * not buyer onboarding, so it's not being added here either.
+ * Screen B05 (Buyer Dashboard). Requests (Milestone 12), Licenses
+ * (Milestone 14), and now real Stripe checkout (Milestone 15) for any
+ * `pending_payment` license. "Downloads/access" and "Saved assets"
+ * remain honest placeholders: downloadable access to licensed content
+ * has no backing implementation anywhere yet (not this milestone's
+ * scope — payment activates a license, it doesn't define what "access"
+ * concretely delivers), and "Saved assets" has no backing table at all
+ * in the schema — that would be a new bookmarking feature, not payments.
  */
 export default async function BuyerDashboardPage() {
   const session = await getPageSession();
@@ -90,6 +92,7 @@ export default async function BuyerDashboardPage() {
                   {l.contentItemTitle}
                 </a>
                 <p className="text-xs text-slate-500">status: {l.status}</p>
+                {l.status === "pending_payment" && <PayNowButton licenseId={l.id} />}
               </li>
             ))}
           </ul>

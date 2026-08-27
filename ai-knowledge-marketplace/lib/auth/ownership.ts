@@ -105,3 +105,17 @@ export async function assertOwnsLicense(session: Session, licenseId: string): Pr
   }
   throw new NotFoundError("License not found");
 }
+
+/**
+ * Milestone 15: initiating checkout is a buyer-only action on their own
+ * license (unlike assertOwnsLicense, which also allows the creator side
+ * for read access) — a creator has no reason to ever start a payment
+ * flow for someone else's purchase.
+ */
+export async function assertOwnsLicenseAsBuyer(session: Session, licenseId: string): Promise<void> {
+  const buyerId = await requireBuyerProfileId(session);
+  const rows = await query<{ buyer_id: string }>("SELECT buyer_id FROM licenses WHERE id = $1", [licenseId]);
+  if (!rows[0] || rows[0].buyer_id !== buyerId) {
+    throw new NotFoundError("License not found");
+  }
+}

@@ -678,6 +678,89 @@ product:
   payment, so this is left for Milestone 15 (Payments) to define if it
   turns out to be needed, rather than inventing a status/flow now.
 
+## Payments (Milestone 15)
+
+- **Provider and currency were an explicit business decision, not an
+  engineering default** — the spec blocks this outright: "Payment
+  provider and supported countries/currencies are unchosen... needs to be
+  picked before the Payments milestone. **[BUSINESS DECISION]**".
+  Confirmed with the user before writing any code: **Stripe**, and a
+  single global currency for V1 (**USD-only**, worldwide) as the smallest
+  reasonable MVP scope — not asked separately, but stated explicitly here
+  as the assumption in effect, per the "make the smallest reasonable
+  assumption and state it" rule. `stripe` (official Node SDK, real types
+  verified against the installed package before writing any client code
+  — never guessed) is now a dependency.
+- **`lib/payments/provider.ts`** — same fail-closed pattern as
+  `lib/ai/provider.ts`: `NotConfiguredPaymentProvider` throws rather than
+  fabricating a checkout URL or accepting an unverified webhook.
+  Deliberately split into two independent capabilities,
+  `getCheckoutProvider()` (needs `STRIPE_SECRET_KEY`, makes a real network
+  call to Stripe) and `getWebhookVerifier()` (needs only
+  `STRIPE_WEBHOOK_SECRET` — `Stripe.webhooks` is a static, key-less HMAC
+  check, so a deployment can verify and act on real Stripe-confirmed
+  payments without the checkout-creation credential ever being
+  configured).
+- **`lib/creator/requests.ts` gained no changes this milestone** — the
+  `licenses` row and its `pending_payment` status already exist from
+  Milestone 14; this milestone only adds what turns `pending_payment`
+  into `active`.
+- **`lib/buyer/checkout.ts`** (`startCheckoutForLicense`) — buyer-only
+  (new `assertOwnsLicenseAsBuyer` in `lib/auth/ownership.ts`, distinct
+  from the existing `assertOwnsLicense` which also allows the creator
+  side for read access). Requires the license to be the buyer's own and
+  still `pending_payment`, and its `terms_snapshot.base_price` to be a
+  positive number (a license with no price set has nothing to pay — a
+  `422`, not a fabricated $0 checkout). The amount charged is read only
+  from the license's own frozen `terms_snapshot`, never from the
+  content's *current* `licensing_terms` — same "never retroactively
+  recalculate" rule as Milestone 14. `successUrl`/`cancelUrl` are
+  computed server-side from the request's own origin, never accepted
+  from the client, to avoid an open-redirect vector on a payment flow.
+- **`POST /api/webhooks/payments`** — the **only** place a license is
+  ever activated, per the spec's explicit rule that payment confirmation
+  must never be client-settable and migration 009's own comment ("never
+  activate on a client-asserted 'payment succeeded'"). Verifies the
+  `Stripe-Signature` header against the raw request body (`request.text()`,
+  never `request.json()` — re-serializing the body would break the
+  signature) before touching anything; an invalid/missing/unconfigured
+  signature is always a `400`, generic on purpose (never describes *why*
+  verification failed). On a verified, paid `checkout.session.completed`
+  event: creates a `transactions` row (`buyer_amount`/`platform_fee`/
+  `creator_amount` computed in integer cents from the license's frozen
+  commission split, converted back to `NUMERIC(12,2)` only at the very
+  end — never float arithmetic on money) and flips the matching license
+  `pending_payment -> active` with `start_date = CURRENT_DATE`, both in
+  one transaction with their own audit log entries
+  (`transaction.create`/`license.activate`). **Idempotent**: a `FOR
+  UPDATE` lock on the license row plus a "still `pending_payment`?"
+  re-check means a Stripe-redelivered (or otherwise duplicated) event for
+  an already-activated license is a safe no-op — verified live by
+  literally replaying the same signed webhook payload. An unrecognized
+  license id or a non-`checkout.session.completed`/unpaid event returns
+  `{handled: false}` with a `200`, never a `5xx` (a webhook 5xx makes
+  Stripe retry indefinitely).
+- **`license_duration` is not turned into a computed `end_date`** —
+  parsing an arbitrary free-text duration string (e.g. "1 year") into a
+  real date is out of scope here; `end_date` stays `null` on activation.
+  Flagged as a real gap, not silently resolved.
+- **Genuinely tested, not just mocked, unlike the AI provider case**:
+  Stripe webhook signing/verification is local HMAC (`Stripe.webhooks` —
+  no network call, no live API key needed), so
+  `tests/unit/stripe-provider.test.ts` signs real payloads with the
+  actual `stripe` SDK and verifies them for real — including a tampered
+  body and a wrong secret both correctly throwing. Checkout *creation*
+  (a real network call to Stripe) is the one piece this sandbox
+  genuinely cannot exercise end-to-end, same limitation as Milestone 7's
+  AI provider — verified instead that it fails closed cleanly with no
+  `STRIPE_SECRET_KEY` configured.
+- **Not built in this milestone, deliberately**: creator payouts
+  (transferring `creator_amount` out to the creator) — that's Milestone
+  16 (Creator earnings), which reads the `transactions` this milestone
+  now creates but doesn't itself move any money to a creator. Refunds
+  (`transaction_status = 'refunded'` already exists in the schema) also
+  aren't wired to any code path yet.
+
 ## Data model (Milestone 2)
 
 All tables from `docs/AI_KNOWLEDGE_LICENSING_SPECIFICATION.md` Section 4
@@ -932,3 +1015,33 @@ creator/buyer). Fixed by deleting the test's own `licenses` rows before
 deleting its users in both files' cleanup, and by manually clearing a
 small backlog of orphaned test users/licenses left behind by test runs
 during this same fix cycle, before the fix landed.
+
+**Milestone 15 specifically:** `npm run typecheck`/`lint`/`test`
+(106/106 — 98 prior + 8 new, real Stripe-signature unit tests), `npm run
+test:integration` (104/104 — 94 prior + 10 new covering checkout-session
+creation, ownership/status/no-price rejections, license activation with
+the exact reconciling `transactions` amounts, audit log entries,
+idempotent replay, unhandled/unpaid events, and an unrecognized license
+id never throwing), `npm run migrate` (no new migration — `licenses`/
+`transactions` already existed from Milestones 2/7), and `npm run build`
+all pass with the new routes compiled in (`stripe` is now a real
+dependency, installed and its actual TypeScript definitions read before
+writing any client code — `npm audit`'s pre-existing findings are all in
+`next`/`eslint`/`vitest` devDependencies, unrelated to `stripe`). Live-
+verified end to end with `curl` and a real running server: submit → list
+→ set a $250 price → request → approve → a real `pending_payment`
+license; starting checkout with no `STRIPE_SECRET_KEY` configured failed
+closed (no fabricated checkout URL, license untouched); a **genuinely
+signed** webhook payload (built with the actual `stripe` SDK's
+`Stripe.webhooks.generateTestHeaderString`, verified against a real
+`STRIPE_WEBHOOK_SECRET` set on the running server — not mocked) correctly
+activated the license (`status: "active"`, `start_date` set) and created
+a `transactions` row with the exact expected split (`buyer_amount:
+"250.00"`, `creator_amount: "200.00"`, `platform_fee: "50.00"`);
+replaying the identical signed payload was a verified no-op (`{"handled":
+false}`, still exactly one `transactions` row); a tampered signature and
+a missing `Stripe-Signature` header both correctly `400`'d; and both
+dashboards rendered the real `active` status server-side. Test data
+(including the transaction and license rows, respecting the same FK
+order as the automated tests) was deleted from the dev database
+afterward.
