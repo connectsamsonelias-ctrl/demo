@@ -13,7 +13,7 @@ function parseId(id: string): string {
   return result.data;
 }
 
-/** Creates the "listing" — moves rights_status SUBMITTED -> LISTED. */
+/** Creates the "listing" — moves rights_status LICENSING_ELIGIBLE -> LISTED. */
 export async function POST(request: Request, { params }: { params: { id: string } }) {
   try {
     const session = await requireRole(request, ["creator"]);

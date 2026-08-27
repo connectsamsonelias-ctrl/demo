@@ -1,21 +1,18 @@
 import { query, withTransaction } from "@/lib/db/pool";
 import { assertOwnsContentItem } from "@/lib/auth/ownership";
 import { recordAuditLog } from "@/lib/audit/log";
+import { assertValidRightsTransition } from "@/lib/rights/state-machine";
 import type { Session } from "@/lib/auth/session";
 import type { ContentItemRow } from "@/lib/db/types";
-import { ValidationError } from "@/lib/errors";
 
 /**
- * Milestone 9 needs *some* content reachable at rights_status='LISTED'
- * for the marketplace to show anything, but the full legal state
- * machine (SUBMITTED -> AUTHORIZATION_PENDING -> AUTHORIZED_FOR_PROCESSING
- * -> ANALYSIS_COMPLETE -> LICENSING_ELIGIBLE -> LISTED) belongs to
- * Milestone 13 — inventing those intermediate states' semantics here
- * would mean guessing at legal meaning ahead of the milestone that owns
- * it. This is a deliberate, minimal simplification: a creator can move
- * SUBMITTED directly to LISTED, gated only by "has a completed audit"
- * (preserving at least that much of the real state machine's intent —
- * ANALYSIS_COMPLETE precedes LICENSING_ELIGIBLE in the spec).
+ * Listing now goes through the centralized rights state machine
+ * (lib/rights/state-machine.ts, Milestone 13): a content item can be
+ * listed exactly when it's reached LICENSING_ELIGIBLE, which the audit
+ * worker sets precisely when a Knowledge Audit succeeds
+ * (workers/audit/processor.ts) — so the separate "has a completed audit"
+ * check this function used before Milestone 13 is now redundant with the
+ * rights_status check and has been removed.
  *
  * Known gap, not fixed here: this does NOT check content_items.status
  * (the admin moderation gate) — because nothing can ever set it to
@@ -34,19 +31,7 @@ export async function listContentOnMarketplace(session: Session, contentItemId: 
     );
     const item = rows.rows[0]!; // assertOwnsContentItem already confirmed this exists and is owned
 
-    if (item.rights_status !== "SUBMITTED") {
-      throw new ValidationError(
-        `Cannot list content in rights_status '${item.rights_status}' — only 'SUBMITTED' content can be listed.`
-      );
-    }
-
-    const auditRows = await client.query(
-      "SELECT 1 FROM knowledge_assets WHERE content_item_id = $1 AND asset_type = 'knowledge_audit'",
-      [contentItemId]
-    );
-    if (auditRows.rows.length === 0) {
-      throw new ValidationError("A completed Knowledge Audit is required before listing on the marketplace.");
-    }
+    assertValidRightsTransition(item.rights_status, "LISTED");
 
     const updated = await client.query<ContentItemRow>(
       "UPDATE content_items SET rights_status = 'LISTED' WHERE id = $1 RETURNING *",
@@ -78,11 +63,7 @@ export async function unlistContentFromMarketplace(session: Session, contentItem
     );
     const item = rows.rows[0]!;
 
-    if (item.rights_status !== "LISTED") {
-      throw new ValidationError(
-        `Cannot unlist content in rights_status '${item.rights_status}' — only 'LISTED' content can be withdrawn.`
-      );
-    }
+    assertValidRightsTransition(item.rights_status, "WITHDRAWN");
 
     const updated = await client.query<ContentItemRow>(
       "UPDATE content_items SET rights_status = 'WITHDRAWN' WHERE id = $1 RETURNING *",

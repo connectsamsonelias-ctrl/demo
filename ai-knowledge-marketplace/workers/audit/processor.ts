@@ -3,6 +3,7 @@ import { getAIAuditProvider } from "@/lib/ai/provider";
 import { qualityScoreFrom } from "@/lib/ai/types";
 import { recordAuditLog } from "@/lib/audit/log";
 import { AUDIT_JOB_TYPE } from "@/lib/creator/audit";
+import { assertValidRightsTransition } from "@/lib/rights/state-machine";
 import type { ContentProcessingJobRow, ContentItemRow } from "@/lib/db/types";
 
 const MAX_ATTEMPTS = 3;
@@ -52,6 +53,18 @@ export async function processNextAuditJob(): Promise<ProcessResult> {
     if (!contentItem) {
       throw new Error(`content_item ${claimed.content_item_id} no longer exists`);
     }
+    // Literal implementation of spec Section 12's "eligibility/authorization check"
+    // pipeline step. In practice every content item reaching a queued job should
+    // already be AUTHORIZED_FOR_PROCESSING (requestAudit only enqueues after
+    // createContentItem's auto-chain), but this is a defensive, testable gate
+    // rather than an assumption — a job for a withdrawn/suspended item fails
+    // cleanly (and retries/exhausts like any other failure) instead of silently
+    // running an audit for content that isn't authorized to be processed.
+    if (contentItem.rights_status !== "AUTHORIZED_FOR_PROCESSING") {
+      throw new Error(
+        `content_item ${contentItem.id} is not authorized for processing (rights_status='${contentItem.rights_status}')`
+      );
+    }
 
     const aiProvider = getAIAuditProvider();
     const result = await aiProvider.generateAudit({
@@ -100,6 +113,24 @@ export async function processNextAuditJob(): Promise<ProcessResult> {
           entityType: "content_processing_jobs",
           entityId: claimed.id,
           metadata: { content_item_id: claimed.content_item_id },
+        },
+        client
+      );
+
+      // AUTHORIZED_FOR_PROCESSING -> LICENSING_ELIGIBLE, skipping ANALYSIS_COMPLETE
+      // as a separately-persisted state — see lib/rights/state-machine.ts for why.
+      assertValidRightsTransition(contentItem.rights_status, "LICENSING_ELIGIBLE");
+      await client.query("UPDATE content_items SET rights_status = 'LICENSING_ELIGIBLE' WHERE id = $1", [
+        contentItem.id,
+      ]);
+      await recordAuditLog(
+        {
+          actorId: null,
+          action: "content.licensing_eligible",
+          entityType: "content_items",
+          entityId: contentItem.id,
+          oldState: { rights_status: contentItem.rights_status },
+          newState: { rights_status: "LICENSING_ELIGIBLE" },
         },
         client
       );

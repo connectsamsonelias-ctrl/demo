@@ -1,7 +1,8 @@
-import { query } from "@/lib/db/pool";
+import { query, withTransaction } from "@/lib/db/pool";
 import { z } from "@/lib/validation";
 import { requireCreatorProfileId, assertOwnsContentItem } from "@/lib/auth/ownership";
 import { recordAuditLog } from "@/lib/audit/log";
+import { assertValidRightsTransition } from "@/lib/rights/state-machine";
 import type { Session } from "@/lib/auth/session";
 import type { ContentItemRow } from "@/lib/db/types";
 import { NotFoundError } from "@/lib/errors";
@@ -50,38 +51,75 @@ export const contentUpdateSchema = z.object({
 });
 export type ContentUpdateInput = z.infer<typeof contentUpdateSchema>;
 
+/**
+ * Creates the content item at rights_status='SUBMITTED', then immediately
+ * transitions it to 'AUTHORIZED_FOR_PROCESSING' in the same transaction.
+ * This insert-then-transition (rather than inserting directly at
+ * AUTHORIZED_FOR_PROCESSING) exists so 'SUBMITTED' is genuinely occupied,
+ * even if only for a moment, and so the transition goes through the same
+ * audited, guard-checked path as every other rights_status change. See
+ * lib/rights/state-machine.ts for why AUTHORIZATION_PENDING is skipped:
+ * contentSubmissionSchema already requires ownershipAttested=true as a
+ * precondition of this function running at all, so there's no real
+ * "pending authorization" window to represent.
+ */
 export async function createContentItem(
   session: Session,
   input: ContentSubmissionInput
 ): Promise<ContentItemRow> {
   const creatorId = await requireCreatorProfileId(session);
-  const rows = await query<ContentItemRow>(
-    `INSERT INTO content_items
-       (creator_id, source_url, source_platform, title, description, language, category,
-        status, rights_status, ownership_attested_at, ownership_attestation_text)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending_review', 'SUBMITTED', now(), $8)
-     RETURNING *`,
-    [
-      creatorId,
-      input.sourceUrl,
-      input.sourcePlatform,
-      input.title,
-      input.description ?? null,
-      input.language,
-      input.category,
-      OWNERSHIP_ATTESTATION_TEXT,
-    ]
-  );
-  const contentItem = rows[0]!;
-  await recordAuditLog({
-    actorId: session.userId,
-    action: "content.submit",
-    entityType: "content_items",
-    entityId: contentItem.id,
-    newState: { rights_status: contentItem.rights_status, source_url: contentItem.source_url },
-    metadata: { ownership_attestation_text: OWNERSHIP_ATTESTATION_TEXT },
+
+  return withTransaction(async (client) => {
+    const inserted = await client.query<ContentItemRow>(
+      `INSERT INTO content_items
+         (creator_id, source_url, source_platform, title, description, language, category,
+          status, rights_status, ownership_attested_at, ownership_attestation_text)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending_review', 'SUBMITTED', now(), $8)
+       RETURNING *`,
+      [
+        creatorId,
+        input.sourceUrl,
+        input.sourcePlatform,
+        input.title,
+        input.description ?? null,
+        input.language,
+        input.category,
+        OWNERSHIP_ATTESTATION_TEXT,
+      ]
+    );
+    const submitted = inserted.rows[0]!;
+    await recordAuditLog(
+      {
+        actorId: session.userId,
+        action: "content.submit",
+        entityType: "content_items",
+        entityId: submitted.id,
+        newState: { rights_status: submitted.rights_status, source_url: submitted.source_url },
+        metadata: { ownership_attestation_text: OWNERSHIP_ATTESTATION_TEXT },
+      },
+      client
+    );
+
+    assertValidRightsTransition(submitted.rights_status, "AUTHORIZED_FOR_PROCESSING");
+    const authorized = await client.query<ContentItemRow>(
+      "UPDATE content_items SET rights_status = 'AUTHORIZED_FOR_PROCESSING' WHERE id = $1 RETURNING *",
+      [submitted.id]
+    );
+    const contentItem = authorized.rows[0]!;
+    await recordAuditLog(
+      {
+        actorId: session.userId,
+        action: "content.authorized_for_processing",
+        entityType: "content_items",
+        entityId: contentItem.id,
+        oldState: { rights_status: "SUBMITTED" },
+        newState: { rights_status: "AUTHORIZED_FOR_PROCESSING" },
+        metadata: { reason: "ownership attestation is a precondition of submission in this implementation" },
+      },
+      client
+    );
+    return contentItem;
   });
-  return contentItem;
 }
 
 export async function listContentItemsForCreator(session: Session): Promise<ContentItemRow[]> {

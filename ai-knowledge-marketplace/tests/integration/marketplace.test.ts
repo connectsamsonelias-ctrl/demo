@@ -32,6 +32,13 @@ const contentInput = {
   ownershipAttested: true as const,
 };
 
+/**
+ * Simulates what workers/audit/processor.ts does on a successful run:
+ * writes the knowledge_assets row AND advances rights_status to
+ * LICENSING_ELIGIBLE (Milestone 13) — without this second step, listing
+ * would reject the item since createContentItem now leaves new items at
+ * AUTHORIZED_FOR_PROCESSING, not SUBMITTED.
+ */
 async function simulateCompletedAudit(contentItemId: string) {
   await query(
     `INSERT INTO knowledge_assets
@@ -41,6 +48,7 @@ async function simulateCompletedAudit(contentItemId: string) {
              '{"model": "stub", "input_basis": "metadata_only"}'::jsonb, 55)`,
     [contentItemId]
   );
+  await query("UPDATE content_items SET rights_status = 'LICENSING_ELIGIBLE' WHERE id = $1", [contentItemId]);
 }
 
 describe("listContentOnMarketplace", () => {
@@ -50,7 +58,7 @@ describe("listContentOnMarketplace", () => {
     await expect(listContentOnMarketplace(session, item.id)).rejects.toBeInstanceOf(ValidationError);
   });
 
-  it("lists content that has a completed audit, transitioning SUBMITTED -> LISTED", async () => {
+  it("lists content that has a completed audit, transitioning LICENSING_ELIGIBLE -> LISTED", async () => {
     const session = await makeCreatorSession();
     const item = await createContentItem(session, contentInput);
     await simulateCompletedAudit(item.id);

@@ -120,8 +120,34 @@ describe("processNextAuditJob", () => {
     expect(status.result?.quality_score).toBe("51.00"); // NUMERIC(5,2) comes back as this exact string
     expect(status.result?.provenance).toMatchObject({ model: "stub-model", input_basis: "metadata_only" });
 
+    // Milestone 13: a successful audit advances rights_status
+    // AUTHORIZED_FOR_PROCESSING -> LICENSING_ELIGIBLE.
+    const [row] = await query<{ rights_status: string }>("SELECT rights_status FROM content_items WHERE id = $1", [
+      item.id,
+    ]);
+    expect(row?.rights_status).toBe("LICENSING_ELIGIBLE");
+
     // A second poll finds nothing left to do.
     await expect(processNextAuditJob()).resolves.toEqual({ processed: false });
+  });
+
+  it("fails the job cleanly if the content item is no longer authorized for processing", async () => {
+    const session = await makeCreatorSession();
+    const item = await createContentItem(session, contentInput);
+    await requestAudit(session, item.id);
+
+    // Simulate the item having moved on (e.g. withdrawn) before the worker got to it.
+    await query("UPDATE content_items SET rights_status = 'WITHDRAWN' WHERE id = $1", [item.id]);
+
+    setAIAuditProvider(new StubProvider(async () => stubResult));
+    const outcome = await processNextAuditJob();
+    expect(outcome).toMatchObject({ outcome: "retrying" });
+
+    const status = await getLatestAudit(session, item.id);
+    expect(status.job?.error_message).toContain("not authorized for processing");
+
+    const assets = await query("SELECT id FROM knowledge_assets WHERE content_item_id = $1", [item.id]);
+    expect(assets).toHaveLength(0);
   });
 
   it("passes the content item's own metadata to the provider, not fabricated data", async () => {

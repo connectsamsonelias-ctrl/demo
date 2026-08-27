@@ -100,7 +100,7 @@ export default async function CreatorDashboardPage() {
                       )}
                     </div>
                     <div className="mt-2">
-                      {item.rights_status === "SUBMITTED" && audit?.job?.status === "succeeded" && (
+                      {item.rights_status === "LICENSING_ELIGIBLE" && (
                         <ListingButton contentItemId={item.id} mode="list" />
                       )}
                       {item.rights_status === "LISTED" && (

@@ -544,6 +544,74 @@ product:
 - Pricing and full licensing terms remain an explicit placeholder on the
   asset detail page — that's Milestone 14, and the page says so.
 
+## Rights management (Milestone 13)
+
+- **`lib/rights/state-machine.ts`** is now the single source of truth for
+  every `rights_status` transition, encoded as data
+  (`RIGHTS_STATUS_TRANSITIONS: Record<RightsStatus, RightsStatus[]>`) plus
+  `assertValidRightsTransition(from, to)` / `isValidRightsTransition`. It
+  encodes the **complete** graph from the spec, including edges no code
+  path can reach yet (Milestone 14 Licensing, 16 Withdrawal, 18 Admin
+  territory) — the graph is correct and independently unit-tested now,
+  not bolted on when those milestones land.
+- **Critical safety property, enforced structurally and covered by a
+  dedicated unit test:** there is **no direct `ACTIVE -> WITHDRAWN`
+  edge**. The only path out of `ACTIVE` is
+  `ACTIVE -> WITHDRAWAL_REQUESTED -> CONTRACTUAL_REVIEW -> WITHDRAWN`.
+  This is the code-level enforcement of the kickoff review's stubbed
+  legal policy that an existing `ACTIVE` license always survives a
+  withdrawal request in v1 — even though no code path can reach `ACTIVE`
+  yet, the graph itself cannot express a shortcut around it.
+- **Two deliberate, explicitly-documented simplifications**, both
+  formalizing decisions already made in earlier milestones rather than
+  inventing new ones:
+  - `SUBMITTED -> AUTHORIZED_FOR_PROCESSING` skips
+    `AUTHORIZATION_PENDING`. Milestone 6 already made ownership
+    attestation (`ownershipAttested: true`) a precondition of row
+    creation, so there is never a real "pending authorization" window to
+    represent honestly. `AUTHORIZATION_PENDING` remains a valid enum
+    value (schema completeness) but no code path ever sets it.
+  - `AUTHORIZED_FOR_PROCESSING -> LICENSING_ELIGIBLE` skips
+    `ANALYSIS_COMPLETE`, for the same reason: no distinguishing
+    business/quality gate exists yet between "analysis just finished"
+    and "eligible for licensing" at this MVP stage.
+- **`createContentItem` now auto-chains the first real transition**:
+  after inserting the row at `SUBMITTED` (unchanged from Milestone 6, own
+  audit-log entry), it immediately transitions to
+  `AUTHORIZED_FOR_PROCESSING` in the same database transaction, through
+  the same guard-checked path as every other transition, with its own
+  `content.authorized_for_processing` audit-log entry. A newly-submitted
+  content item is now at `AUTHORIZED_FOR_PROCESSING`, not `SUBMITTED`,
+  by the time the API call returns — verified live and in integration
+  tests.
+- **`workers/audit/processor.ts` gates on rights_status before calling
+  the AI provider**: a literal implementation of spec Section 12's
+  "eligibility/authorization check" pipeline step. If a claimed job's
+  content item isn't `AUTHORIZED_FOR_PROCESSING` (e.g. it was withdrawn
+  after the job was queued), the job fails cleanly through the existing
+  retry-to-failure path with a clear `error_message`, instead of running
+  an audit for content that isn't authorized to be processed. On success,
+  it now also transitions `AUTHORIZED_FOR_PROCESSING -> LICENSING_ELIGIBLE`
+  in the same transaction as the `knowledge_assets` insert, with its own
+  `content.licensing_eligible` audit-log entry.
+- **`lib/creator/listing.ts` refactored to use the centralized guard**:
+  the separate "SUBMITTED + has a knowledge_assets row" check from
+  Milestone 9 is gone. Listing now requires exactly `rights_status ===
+  'LICENSING_ELIGIBLE'` (checked via `assertValidRightsTransition`), and
+  unlisting requires `'LISTED'` — both now share the same transition-
+  guard code path as every other `rights_status` change in the app, and
+  a rejected transition names both states in its error message.
+  `hasCompletedAudit()` (an unrelated dashboard read-convenience) is
+  untouched.
+- **Access requests (Milestone 12) stance reaffirmed, unchanged**:
+  `LICENSE_REQUESTED` is a valid graph node (for spec completeness) but
+  is never actually occupied by this product — `access_requests` stays a
+  separate 1:many table, deliberately not folded into the single-valued
+  `rights_status` field. The transition graph documents this in a
+  comment rather than silently omitting the edge.
+- Deleted the Milestone 1 `lib/rights/README.md` placeholder now that
+  real code lives there.
+
 ## Data model (Milestone 2)
 
 All tables from `docs/AI_KNOWLEDGE_LICENSING_SPECIFICATION.md` Section 4
@@ -741,3 +809,25 @@ on both dashboards, re-approving 422'd, `rights_status` stayed `LISTED`
 in the database, and a second creator (with their own profile) got 404
 attempting to resolve the first creator's request. Test data from these
 live calls was deleted from the dev database afterward.
+
+**Milestone 13 specifically:** `npm run typecheck`/`lint`/`test`
+(93/93 — 81 prior + 12 new state-machine unit tests), `npm run
+test:integration` (85/85 — 84 prior + 1 new gate-failure test, plus
+several existing tests updated to reflect the new post-submission state
+and listing precondition), `npm run migrate` (no new migration needed —
+this milestone is pure application-layer logic against the existing
+`rights_status` enum), and `npm run build` all pass. Live-verified end
+to end with `curl` against a real creator account: submitting content
+returned `rights_status: "AUTHORIZED_FOR_PROCESSING"` immediately (the
+auto-chain from `SUBMITTED`, confirmed via the API response, not
+inferred); attempting to list it before an audit correctly `422`'d with
+`"Cannot transition content from rights_status
+'AUTHORIZED_FOR_PROCESSING' to 'LISTED'"`; after simulating a completed
+audit (direct DB insert + `rights_status` update, mirroring what
+`workers/audit/processor.ts` now does on success — no `ANTHROPIC_API_KEY`
+in this environment, same limitation as Milestone 7), listing succeeded
+and the item appeared in `GET /api/marketplace`; unlisting transitioned
+it to `WITHDRAWN`. Test data from these live calls was deleted from the
+dev database afterward. The `ACTIVE -> WITHDRAWN` safety property (no
+direct edge) is verified by a dedicated unit test rather than live,
+since no code path can reach `ACTIVE` yet.

@@ -62,6 +62,9 @@ async function makeListedItem(creator: Session) {
      VALUES ($1, 'knowledge_audit', 'summary', 50)`,
     [item.id]
   );
+  // Milestone 13: simulate the audit worker's rights_status advance, since
+  // createContentItem now leaves new items at AUTHORIZED_FOR_PROCESSING.
+  await query("UPDATE content_items SET rights_status = 'LICENSING_ELIGIBLE' WHERE id = $1", [item.id]);
   await listContentOnMarketplace(creator, item.id);
   return item;
 }

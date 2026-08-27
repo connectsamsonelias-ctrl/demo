@@ -39,26 +39,36 @@ const validInput = {
 };
 
 describe("createContentItem", () => {
-  it("creates a content item at SUBMITTED / pending_review with the attestation recorded", async () => {
+  it("creates a content item at AUTHORIZED_FOR_PROCESSING / pending_review with the attestation recorded", async () => {
     const session = await makeCreatorSession();
     const item = await createContentItem(session, validInput);
 
-    expect(item.rights_status).toBe("SUBMITTED");
+    // Milestone 13: SUBMITTED -> AUTHORIZED_FOR_PROCESSING is auto-chained
+    // within createContentItem, since ownershipAttested=true is already a
+    // precondition of this function running at all — see
+    // lib/rights/state-machine.ts for the full reasoning.
+    expect(item.rights_status).toBe("AUTHORIZED_FOR_PROCESSING");
     expect(item.status).toBe("pending_review");
     expect(item.ownership_attestation_text).toBe(OWNERSHIP_ATTESTATION_TEXT);
     expect(item.ownership_attested_at).toBeTruthy();
     expect(item.title).toBe("How compressors work");
   });
 
-  it("writes an audit log entry for the submission", async () => {
+  it("writes audit log entries for both the submission and the auto-authorization", async () => {
     const session = await makeCreatorSession();
     const item = await createContentItem(session, validInput);
 
-    const [log] = await query<{ action: string }>(
+    const [submitLog] = await query<{ action: string }>(
       "SELECT action FROM audit_logs WHERE entity_id = $1 AND action = 'content.submit'",
       [item.id]
     );
-    expect(log?.action).toBe("content.submit");
+    expect(submitLog?.action).toBe("content.submit");
+
+    const [authLog] = await query<{ action: string }>(
+      "SELECT action FROM audit_logs WHERE entity_id = $1 AND action = 'content.authorized_for_processing'",
+      [item.id]
+    );
+    expect(authLog?.action).toBe("content.authorized_for_processing");
   });
 });
 
@@ -105,7 +115,7 @@ describe("updateContentItem", () => {
     const item = await createContentItem(session, validInput);
     const updated = await updateContentItem(session, item.id, { title: "New title" });
 
-    expect(updated.rights_status).toBe("SUBMITTED");
+    expect(updated.rights_status).toBe("AUTHORIZED_FOR_PROCESSING");
     expect(updated.status).toBe("pending_review");
   });
 
