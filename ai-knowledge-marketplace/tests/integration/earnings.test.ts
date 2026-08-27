@@ -80,7 +80,7 @@ async function makeActiveLicense(
      VALUES ($1, 'knowledge_audit', 'summary', 50)`,
     [item.id]
   );
-  await query("UPDATE content_items SET rights_status = 'LICENSING_ELIGIBLE' WHERE id = $1", [item.id]);
+  await query("UPDATE content_items SET status = 'approved', rights_status = 'LICENSING_ELIGIBLE' WHERE id = $1", [item.id]);
   await listContentOnMarketplace(creator, item.id);
   await setLicensingTerms(creator, item.id, {
     allowedUseTypes: ["RAG dataset"],

@@ -48,7 +48,7 @@ async function simulateCompletedAudit(contentItemId: string) {
              '{"model": "stub", "input_basis": "metadata_only"}'::jsonb, 55)`,
     [contentItemId]
   );
-  await query("UPDATE content_items SET rights_status = 'LICENSING_ELIGIBLE' WHERE id = $1", [contentItemId]);
+  await query("UPDATE content_items SET status = 'approved', rights_status = 'LICENSING_ELIGIBLE' WHERE id = $1", [contentItemId]);
 }
 
 describe("listContentOnMarketplace", () => {

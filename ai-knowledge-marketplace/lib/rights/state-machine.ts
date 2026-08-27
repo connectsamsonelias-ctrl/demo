@@ -8,12 +8,13 @@ import type { RightsStatus } from "@/lib/db/types";
  * triggers a given edge.
  *
  * Not every edge here is reachable by shipped code yet. Some are simply
- * future work (16 Creator earnings/withdrawal, 18 Admin); LICENSE_REQUESTED
- * and LICENSED specifically are permanent graph-only nodes that this
- * implementation has now decided (as of Milestone 14) will never be
- * triggered at all — see the per-edge comments below. They're included now
- * so the graph is complete and its safety properties (see below) are
- * enforced from day one, not bolted on later.
+ * future work (ACTIVE's withdrawal-request path isn't assigned to any
+ * milestone on the current roadmap); LICENSE_REQUESTED and LICENSED
+ * specifically are permanent graph-only nodes that this implementation
+ * has now decided (as of Milestone 14) will never be triggered at all —
+ * see the per-edge comments below. They're included now so the graph is
+ * complete and its safety properties (see below) are enforced from day
+ * one, not bolted on later.
  *
  * Two deliberate simplifications versus the spec's literal linear diagram,
  * both decided in earlier milestones and just formalized here:
@@ -46,6 +47,9 @@ export const RIGHTS_STATUS_TRANSITIONS: Record<RightsStatus, RightsStatus[]> = {
   AUTHORIZED_FOR_PROCESSING: ["ANALYSIS_COMPLETE", "LICENSING_ELIGIBLE"],
   ANALYSIS_COMPLETE: ["LICENSING_ELIGIBLE"], // not yet triggered by any code path
   LICENSING_ELIGIBLE: ["LISTED"],
+  // LISTED -> SUSPENDED and its reverse (below) are triggered for real as
+  // of Milestone 17 (Admin): lib/admin/content.ts's suspendContent/
+  // reinstateContent.
   LISTED: ["LICENSE_REQUESTED", "LICENSED", "WITHDRAWN", "SUSPENDED"],
   LICENSE_REQUESTED: ["LICENSED"], // not yet triggered, and never will be by this implementation —
   // access requests are a separate 1:many `access_requests` table (Milestone 12), and
@@ -55,11 +59,11 @@ export const RIGHTS_STATUS_TRANSITIONS: Record<RightsStatus, RightsStatus[]> = {
   // relationship into a 1:1 field. See lib/creator/requests.ts's
   // createLicenseForApprovedRequest.
   LICENSED: ["ACTIVE"], // not yet triggered, same reasoning as LICENSE_REQUESTED above
-  ACTIVE: ["WITHDRAWAL_REQUESTED"], // not yet triggered — Milestone 16 territory. No ACTIVE -> WITHDRAWN edge, by design.
+  ACTIVE: ["WITHDRAWAL_REQUESTED"], // not yet triggered — not assigned to a milestone yet. No ACTIVE -> WITHDRAWN edge, by design.
   WITHDRAWAL_REQUESTED: ["CONTRACTUAL_REVIEW"], // not yet triggered
   CONTRACTUAL_REVIEW: ["WITHDRAWN"], // not yet triggered — the only way an ACTIVE license's content ever reaches WITHDRAWN
   WITHDRAWN: [],
-  SUSPENDED: ["LISTED"], // not yet triggered — Milestone 18 (Admin) reinstatement
+  SUSPENDED: ["LISTED"], // triggered as of Milestone 17 (Admin) reinstatement
 };
 
 export function isValidRightsTransition(from: RightsStatus, to: RightsStatus): boolean {

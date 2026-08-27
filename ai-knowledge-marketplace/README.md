@@ -789,6 +789,72 @@ product:
   card is now the real summary plus a per-transaction list (content
   title, buyer org, the creator's own share, status).
 
+## Admin dashboard (Milestone 17)
+
+- **Closes a gap flagged since Milestone 9**: the kickoff review's
+  "**[LEGAL/OPS — MUST EXIST DAY ONE]**" requirement for a working
+  takedown/moderation process, and `lib/creator/listing.ts`'s own
+  "Known gap... anything a creator lists today goes live with zero
+  moderation review" comment. `listContentOnMarketplace` now requires
+  `content_items.status === 'approved'` in addition to the existing
+  `rights_status` guard — both gates are independent and both must pass.
+  Verified live: listing a rights-eligible item still `422`'d until an
+  admin approved it.
+- **`lib/admin/content.ts`** — the moderation queue (`pending_review`,
+  oldest first) plus `approveContent`/`rejectContent` (from
+  `pending_review`) and `suspendContent`/`reinstateContent` (the takedown
+  action the spec calls "manual admin action acceptable for v1", between
+  `approved` and `suspended`). Suspending content that's currently
+  `LISTED` also drives `rights_status LISTED -> SUSPENDED` — an edge
+  `lib/rights/state-machine.ts` defined back in Milestone 13 but never
+  triggered until now (its comment is corrected accordingly: it had said
+  "Milestone 18" throughout, a stale reference from before this session's
+  roadmap settled on Admin dashboard = Milestone 17). Reinstating drives
+  it back `SUSPENDED -> LISTED`. If the content isn't currently `LISTED`
+  (most importantly `ACTIVE`, where a real license exists), there is
+  deliberately no valid rights_status edge, so only the moderation status
+  changes — an admin content action can never silently kill an active
+  license, same invariant as the ACTIVE/WITHDRAWN safety property.
+  Verified live end to end: suspending a listed item removed it from
+  `GET /api/marketplace` immediately; reinstating brought it back.
+- **`lib/admin/users.ts`** — `listUsersForReview` (no password hashes
+  selected, ever) and `suspendUser`/`reinstateUser` (`users.status`,
+  which `verifyCredentials` already checks — a suspended account is
+  immediately blocked from signing in, not just hidden from some UI).
+  Suspending an admin account through this action is refused outright,
+  to avoid an admin locking out themselves or another admin. Deliberately
+  does **not** cascade to the user's own content (e.g. auto-unlisting
+  everything they own) — that's real future work if needed, not invented
+  here; `lib/admin/content.ts`'s actions stay separate and explicit.
+  Verified live: a real creator account, suspended via the API, was then
+  rejected on a real sign-in attempt with the exact same generic
+  `CredentialsSignin` error Milestone 3 already uses for any failed
+  login (no distinguishable "this account is suspended" message — same
+  enumeration-avoidance reasoning as everywhere else in this app).
+- **`lib/auth/admin.ts`** — a small `requireAdmin(session)` defense-in-
+  depth check every `lib/admin/*` function calls, on top of (never
+  instead of) the route-level `requireRole(request, ["admin"])` every
+  other role-gated route already uses.
+- **`/admin/dashboard`** — same protected-page pattern as the creator/
+  buyer dashboards (redirect to `/signin` if signed out, to `/` if signed
+  in as the wrong role). Shows the real moderation queue and user list,
+  with Approve/Reject/Suspend/Reinstate actions.
+- **Admin account provisioning stays exactly as decided in Milestone 3**:
+  `PUBLIC_SIGNUP_ROLES` in `lib/auth/credentials.ts` already excluded
+  `admin` from public signup, with a comment noting manual DB
+  provisioning for now. This milestone doesn't change that — the admin
+  account used for live verification was seeded directly via the app's
+  own `hashPassword()` (a real, correctly-hashed password, not a
+  shortcut), not through any new provisioning flow.
+- **Deliberately descoped, not silently dropped**: broader "view
+  everything" admin panels for access requests/licenses/transactions
+  (the `access_request.review_any`/`license.review_any`/
+  `transaction.review_any` capabilities already sit unused in
+  `lib/auth/permissions.ts`'s matrix) and creator/buyer
+  `verification_status` review (a separate, larger KYC-style feature
+  nothing in the app currently gates on). Both are real gaps for a
+  production launch, not corners cut silently.
+
 ## Data model (Milestone 2)
 
 All tables from `docs/AI_KNOWLEDGE_LICENSING_SPECIFICATION.md` Section 4
@@ -1092,3 +1158,34 @@ correctly returned `totalEarned: "320.00"` (80% of $400) with one ledger
 entry showing the buyer org and the creator's own share; and the creator
 dashboard rendered both the summary and the entry server-side. Test data
 was deleted from the dev database afterward.
+
+**Milestone 17 specifically:** `npm run typecheck`/`lint`/`test`
+(106/106, unchanged — no new input schema), `npm run test:integration`
+(130/130 — 109 prior + 21 new across two new test files: content
+moderation queue scoping and non-admin rejection, approve/reject from
+`pending_review` only, the listing gate rejecting a rights-eligible-but-
+unapproved item and allowing it once approved, suspend/reinstate driving
+`rights_status` only when the item is actually `LISTED`, the ACTIVE-style
+non-transition case, audit log entries for every action, user listing
+without password hashes, suspend/reinstate genuinely round-tripping
+through `verifyCredentials`, refusing to suspend an admin, and 404/403
+cases), `npm run migrate` (no new migration — pure application logic
+against existing `content_moderation_status`/`users.status` columns),
+and `npm run build` all pass with the new `/admin/dashboard` page and
+eight new API routes compiled in. Live-verified end to end with `curl`
+against a real running server and a real admin account (seeded via the
+app's own `hashPassword()`, per the Milestone 3 decision that admin
+provisioning stays manual): a rights-eligible item correctly `422`'d on
+listing with "content must be approved by an admin" before any
+moderation action; appeared in the real moderation queue
+(`GET /api/admin/content`); a **non-admin** creator got a real `403`
+attempting the same approve endpoint; approving it as the real admin let
+the exact same listing call succeed immediately after; suspending the
+now-listed item removed it from `GET /api/marketplace` in the same
+request cycle, and reinstating brought it back; and suspending a real
+creator account via `POST /api/admin/users/[id]/suspend` caused that
+creator's next real sign-in attempt to fail with the same generic
+`CredentialsSignin` error any wrong password produces (verified via the
+actual NextAuth credentials callback, not inferred). Test data —
+including the seeded admin account — was deleted from the dev database
+afterward.

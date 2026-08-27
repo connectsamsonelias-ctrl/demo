@@ -2,11 +2,12 @@ import { query, withTransaction } from "@/lib/db/pool";
 import { assertOwnsContentItem } from "@/lib/auth/ownership";
 import { recordAuditLog } from "@/lib/audit/log";
 import { assertValidRightsTransition } from "@/lib/rights/state-machine";
+import { ValidationError } from "@/lib/errors";
 import type { Session } from "@/lib/auth/session";
 import type { ContentItemRow } from "@/lib/db/types";
 
 /**
- * Listing now goes through the centralized rights state machine
+ * Listing goes through the centralized rights state machine
  * (lib/rights/state-machine.ts, Milestone 13): a content item can be
  * listed exactly when it's reached LICENSING_ELIGIBLE, which the audit
  * worker sets precisely when a Knowledge Audit succeeds
@@ -14,12 +15,15 @@ import type { ContentItemRow } from "@/lib/db/types";
  * check this function used before Milestone 13 is now redundant with the
  * rights_status check and has been removed.
  *
- * Known gap, not fixed here: this does NOT check content_items.status
- * (the admin moderation gate) — because nothing can ever set it to
- * 'approved' yet; Milestone 18 (Admin) hasn't shipped. That means
- * anything a creator lists today goes live with zero moderation review.
- * This is a real trust/safety gap that must be closed before public
- * launch, not a corner cut silently.
+ * Milestone 17 closes a gap flagged since Milestone 9: listing now also
+ * requires content_items.status === 'approved' — the admin moderation
+ * gate (lib/admin/content.ts). Before this, nothing could ever set that
+ * column to 'approved', so anything a creator listed went live with zero
+ * moderation review — exactly the "[LEGAL/OPS — MUST EXIST DAY ONE]" gap
+ * the kickoff review flagged. Both gates are independent and both must
+ * pass: a rights-eligible-but-unreviewed item still can't be listed, and
+ * (once Milestone 18 or later might allow it) an approved-but-not-yet-
+ * rights-eligible item still can't either.
  */
 export async function listContentOnMarketplace(session: Session, contentItemId: string): Promise<ContentItemRow> {
   await assertOwnsContentItem(session, contentItemId);
@@ -31,6 +35,11 @@ export async function listContentOnMarketplace(session: Session, contentItemId: 
     );
     const item = rows.rows[0]!; // assertOwnsContentItem already confirmed this exists and is owned
 
+    if (item.status !== "approved") {
+      throw new ValidationError(
+        `Cannot list content with moderation status '${item.status}' — content must be approved by an admin before it can be listed.`
+      );
+    }
     assertValidRightsTransition(item.rights_status, "LISTED");
 
     const updated = await client.query<ContentItemRow>(
