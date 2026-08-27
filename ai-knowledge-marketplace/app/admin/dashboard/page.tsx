@@ -39,7 +39,12 @@ export default async function AdminDashboardPage() {
     <div className="max-w-3xl">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Admin dashboard</h1>
-        <SignOutButton />
+        <div className="flex items-center gap-3">
+          <a href="/admin/analytics" className="text-sm underline">
+            Platform analytics
+          </a>
+          <SignOutButton />
+        </div>
       </div>
 
       <section className="mt-6">

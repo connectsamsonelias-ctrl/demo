@@ -913,6 +913,51 @@ product:
   specifically for auth endpoints, and blanket rate-limiting every route
   wasn't asked for or justified by anything found during this review.
 
+## Analytics (Milestone 19)
+
+- **Real platform analytics, no new schema, no external analytics/error-
+  tracking provider.** The spec never names a required provider for this
+  milestone (unlike payments/auth, where it explicitly blocks silently
+  picking one), so `lib/admin/analytics.ts` builds entirely on data that
+  already exists across `users`, `content_items`, `access_requests`,
+  `licenses`, `transactions`, and `audit_logs`.
+- **Funnels, not vanity metrics** — directly per the spec's own framing
+  in Step 1 ("Measured by qualified-supply/qualified-demand funnels, not
+  vanity metrics"). Each stage is a strict subset of the one before it
+  by construction (every query narrows on the same population), not
+  independent counts that could double-count or drift apart:
+  - **Supply**: creator signs up → has a profile → has submitted content
+    → has ever listed something.
+  - **Demand**: buyer signs up → has a profile → has made a request →
+    holds an active (paid) license.
+- **`hasEverListed` reads from `audit_logs`** (`content.listed` actions),
+  not current `rights_status` — a cumulative count that doesn't drop when
+  content is later unlisted or suspended. Verified live and by an
+  integration test: unlisting content after it was listed leaves this
+  count unchanged.
+- **Commerce totals** (GMV, platform revenue, creator payouts owed) reuse
+  the exact computation Milestone 16 already does per-creator, just
+  platform-wide and unfiltered — summed only over `succeeded`
+  transactions, same reasoning as the earnings ledger.
+- **Status breakdowns** for content (both moderation and rights status),
+  access requests, licenses, and transactions — a real-time snapshot of
+  where everything in the platform currently sits.
+- **Daily signups, last 30 days**, zero-filled via `generate_series` so a
+  quiet day still shows a row with `0`, not a gap.
+- **`/admin/analytics`**, linked from `/admin/dashboard`, same protected-
+  page pattern as every other admin/creator/buyer page. UI stays
+  consistent with the rest of the app — plain bordered stat tiles and
+  tables (the same idiom already used for placeholder grids since
+  Milestone 8), not a new charting library.
+- **A real test-infrastructure fix, not an application bug**: adding
+  platform-wide aggregate queries surfaced that `vitest.integration.config.ts`
+  ran test files in parallel against the one shared dev Postgres
+  instance — harmless for every prior milestone's scoped-to-its-own-rows
+  assertions, but a genuine source of flakiness for a global `COUNT(*)`
+  read sandwiched between another file's concurrent insert and cleanup.
+  Fixed by setting `fileParallelism: false`; confirmed deterministic
+  across two consecutive full runs afterward.
+
 ## Data model (Milestone 2)
 
 All tables from `docs/AI_KNOWLEDGE_LICENSING_SPECIFICATION.md` Section 4
@@ -1272,3 +1317,28 @@ seen anywhere was an unrelated pre-existing `/favicon.ico` 404, confirmed
 via a direct `curl` and unrelated to this milestone's changes. Test data
 (including the CSP-check accounts and the seeded admin) was deleted from
 the dev database afterward.
+
+**Milestone 19 specifically:** `npm run typecheck`/`lint`/`test`
+(106/106, unchanged — no new input schema), `npm run test:integration`
+(142/142 — 138 prior + 4 new covering non-admin rejection, the full
+supply-and-demand funnel moving in lockstep via before/after deltas
+(robust to concurrent noise from other test files), `hasEverListed`
+staying constant across an unlist, and the 30-row zero-filled daily
+signups window), `npm run migrate` (no new migration — pure read logic
+over existing tables), and `npm run build` all pass with the new
+`/admin/analytics` page and its API route compiled in. Fixed one real
+test-infrastructure flake in the same pass (see the milestone section
+above: `fileParallelism: false`), confirmed deterministic across two
+consecutive full integration runs. Live-verified end to end with `curl`
+against a real running server: analytics read all-zero on a clean
+database; after running the complete submit → admin-approve → list →
+price ($300) → request → approve → pay chain (the payment step a
+genuinely Stripe-signed webhook, same real-SDK-signing approach as
+Milestones 15/16), every funnel stage, status breakdown, and commerce
+total updated to exactly the expected values in one call
+(`gmv: "300.00"`, `platformRevenue: "60.00"`, `creatorPayoutsOwed:
+"240.00"` — the same 80/20 split verified in every milestone since 14);
+today's row in the daily-signups table showed the real counts; the
+`/admin/analytics` page rendered the real GMV figure server-side; and a
+non-admin got a real `403` on the API and a `307` redirect on the page.
+Test data was deleted from the dev database afterward.

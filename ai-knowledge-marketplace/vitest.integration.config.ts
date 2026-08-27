@@ -12,6 +12,16 @@ export default defineConfig({
     environment: "node",
     include: ["tests/integration/**/*.test.ts"],
     testTimeout: 15000,
+    // These tests share one real Postgres database. Milestone 19 added
+    // platform-wide aggregate queries (lib/admin/analytics.ts) that read
+    // global row counts — running test files in parallel let another
+    // file's concurrent insert/cleanup land between a test's own
+    // before/after snapshots and flake the assertion. Every test file
+    // was already written to clean up strictly its own rows, so this
+    // isn't fixing a correctness bug in the app; it's removing a false
+    // signal from testing global aggregates against a shared, actively-
+    // mutated database.
+    fileParallelism: false,
   },
   resolve: {
     alias: {
