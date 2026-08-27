@@ -4,6 +4,7 @@ import { getCreatorProfile } from "@/lib/creator/profile";
 import { listContentItemsForCreator } from "@/lib/creator/content";
 import { getLatestAudit, type AuditStatus } from "@/lib/creator/audit";
 import { listAccessRequestsForCreator } from "@/lib/creator/requests";
+import { listLicensesForCreator } from "@/lib/creator/licenses";
 import type { ContentItemRow } from "@/lib/db/types";
 import { SignOutButton } from "./sign-out-button";
 import { RunAuditButton } from "./run-audit-button";
@@ -14,11 +15,11 @@ export const dynamic = "force-dynamic";
 
 /**
  * Screen C06 (Creator Dashboard). Content assets + Audit results +
- * Requests are real, queried directly (Server Component -> lib call, no
- * self-fetch round trip). Active licenses / Earnings remain
- * placeholders — those domains (Milestones 14, 16) don't exist yet, and
- * faking a "0 licenses" card from nothing would misrepresent what's
- * actually been built.
+ * Requests + Licenses are real, queried directly (Server Component ->
+ * lib call, no self-fetch round trip). Earnings remains a placeholder —
+ * that's Milestone 16, and every license here is still `pending_payment`
+ * (Milestone 15 owns activation) — faking payout numbers from nothing
+ * would misrepresent what's actually been built.
  */
 export default async function CreatorDashboardPage() {
   const session = await getPageSession();
@@ -30,6 +31,7 @@ export default async function CreatorDashboardPage() {
   let items: ContentItemRow[] = [];
   let audits: Record<string, AuditStatus> = {};
   let requests: Awaited<ReturnType<typeof listAccessRequestsForCreator>> = [];
+  let licenses: Awaited<ReturnType<typeof listLicensesForCreator>> = [];
   if (profile) {
     items = await listContentItemsForCreator(session);
     const entries = await Promise.all(
@@ -37,6 +39,7 @@ export default async function CreatorDashboardPage() {
     );
     audits = Object.fromEntries(entries);
     requests = await listAccessRequestsForCreator(session);
+    licenses = await listLicensesForCreator(session);
   }
 
   return (
@@ -99,13 +102,16 @@ export default async function CreatorDashboardPage() {
                         </div>
                       )}
                     </div>
-                    <div className="mt-2">
+                    <div className="mt-2 flex items-center gap-3">
                       {item.rights_status === "LICENSING_ELIGIBLE" && (
                         <ListingButton contentItemId={item.id} mode="list" />
                       )}
                       {item.rights_status === "LISTED" && (
                         <ListingButton contentItemId={item.id} mode="unlist" />
                       )}
+                      <a href={`/creator/content/${item.id}/licensing-terms`} className="text-sm underline">
+                        Licensing terms
+                      </a>
                     </div>
                   </li>
                 );
@@ -137,8 +143,28 @@ export default async function CreatorDashboardPage() {
         </section>
       )}
 
+      {profile && (
+        <section className="mt-8">
+          <h2 className="font-medium">Licenses</h2>
+          {licenses.length === 0 ? (
+            <p className="mt-2 text-sm text-slate-600">No licenses yet — approve a request to create one.</p>
+          ) : (
+            <ul className="mt-3 flex flex-col gap-2">
+              {licenses.map((l) => (
+                <li key={l.id} className="rounded border border-slate-200 p-3 text-sm">
+                  <p className="font-medium">{l.contentItemTitle}</p>
+                  <p className="text-xs text-slate-500">
+                    licensed to {l.buyerOrganizationName} · status: {l.status}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
+
       <section className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2">
-        {["Active licenses", "Earnings"].map((label) => (
+        {["Earnings"].map((label) => (
           <div key={label} className="rounded border border-dashed border-slate-300 p-4 text-sm text-slate-500">
             <p className="font-medium text-slate-700">{label}</p>
             <p className="mt-1">Available once that milestone ships.</p>

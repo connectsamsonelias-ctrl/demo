@@ -7,9 +7,11 @@ import type { RightsStatus } from "@/lib/db/types";
  * so it can be tested independently of whatever code path currently
  * triggers a given edge.
  *
- * Not every edge here is reachable by shipped code yet — later milestones
- * (14 Licensing, 16 Creator earnings/withdrawal, 18 Admin) are expected to
- * trigger the edges below marked "not yet triggered". They're included now
+ * Not every edge here is reachable by shipped code yet. Some are simply
+ * future work (16 Creator earnings/withdrawal, 18 Admin); LICENSE_REQUESTED
+ * and LICENSED specifically are permanent graph-only nodes that this
+ * implementation has now decided (as of Milestone 14) will never be
+ * triggered at all — see the per-edge comments below. They're included now
  * so the graph is complete and its safety properties (see below) are
  * enforced from day one, not bolted on later.
  *
@@ -45,10 +47,14 @@ export const RIGHTS_STATUS_TRANSITIONS: Record<RightsStatus, RightsStatus[]> = {
   ANALYSIS_COMPLETE: ["LICENSING_ELIGIBLE"], // not yet triggered by any code path
   LICENSING_ELIGIBLE: ["LISTED"],
   LISTED: ["LICENSE_REQUESTED", "LICENSED", "WITHDRAWN", "SUSPENDED"],
-  LICENSE_REQUESTED: ["LICENSED"], // not yet triggered — this product's access requests are a
-  // separate 1:many `access_requests` table (Milestone 12), deliberately not folded into
-  // rights_status; see lib/buyer/requests.ts and lib/creator/requests.ts.
-  LICENSED: ["ACTIVE"], // not yet triggered — Milestone 14 (Licensing) territory
+  LICENSE_REQUESTED: ["LICENSED"], // not yet triggered, and never will be by this implementation —
+  // access requests are a separate 1:many `access_requests` table (Milestone 12), and
+  // Milestone 14 confirmed the same reasoning for the `licenses` table itself: a content
+  // item can have many concurrent licenses to different buyers, so a single-valued
+  // rights_status can never represent "has a license" without conflating that 1:many
+  // relationship into a 1:1 field. See lib/creator/requests.ts's
+  // createLicenseForApprovedRequest.
+  LICENSED: ["ACTIVE"], // not yet triggered, same reasoning as LICENSE_REQUESTED above
   ACTIVE: ["WITHDRAWAL_REQUESTED"], // not yet triggered — Milestone 16 territory. No ACTIVE -> WITHDRAWN edge, by design.
   WITHDRAWAL_REQUESTED: ["CONTRACTUAL_REVIEW"], // not yet triggered
   CONTRACTUAL_REVIEW: ["WITHDRAWN"], // not yet triggered — the only way an ACTIVE license's content ever reaches WITHDRAWN

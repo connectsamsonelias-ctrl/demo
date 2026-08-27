@@ -612,6 +612,72 @@ product:
 - Deleted the Milestone 1 `lib/rights/README.md` placeholder now that
   real code lives there.
 
+## Licensing (Milestone 14)
+
+- **`lib/licensing/commission.ts`** — the platform's default commission
+  split, `DEFAULT_CREATOR_SHARE_PERCENT = 80` /
+  `DEFAULT_PLATFORM_SHARE_PERCENT = 20`. The spec explicitly flags "default
+  commission split" as a **Business** decision, not an engineering
+  default — confirmed with the user before writing any code: 80/20,
+  matching the spec's own "illustrative 20%" commission figure. A single
+  global constant, not per-creator or per-license-type — "per-license-type
+  variance" is a separate, still-open business decision, not resolved
+  here.
+- **`lib/creator/licensing-terms.ts`** (Screen C05, "opt-in to licensing
+  with explicit terms") — a creator sets/updates commercial terms
+  (allowed use types, duration, geographic scope, commercial status,
+  pricing model, base price) on their content. Full-replace upsert
+  (`licensing_terms.content_item_id` is `UNIQUE`), ownership-gated,
+  audit-logged (`licensing_terms.create`/`.update`, distinguished).
+  `creator_share_percent`/`platform_share_percent` are **not present in
+  the input schema at all** — set only from the commission default above,
+  never accepted from a request body, per the spec's rule that commission
+  must never be client-settable. Verified live and by a schema unit test
+  asserting the fields don't even parse through.
+- **Approving an access request now creates a real `licenses` row**, not
+  just a status flip. `lib/creator/requests.ts`'s `approveAccessRequest`
+  (Milestone 12) now also runs `createLicenseForApprovedRequest` in the
+  same transaction as the status update: it requires `licensing_terms` to
+  already exist for the content item (else `422`, "set licensing terms
+  before approving requests" — the smallest-assumption choice: never
+  fabricate a `terms_snapshot` for terms nobody set), then inserts a
+  `licenses` row with `terms_snapshot` copied from the current
+  `licensing_terms` at that instant (per the spec's Section 14 rule:
+  never re-derive historical terms from a row that can change later),
+  `license_type` fixed at `'standard'` for every V1 license (the spec's
+  "per-license-type variance" stays unresolved), and `status` starting at
+  `'pending_payment'` (migration 009's own rule: never activate on an
+  assumption — only Milestone 15's verified payment webhook does that).
+  Rejecting a request creates no license. Verified live and by integration
+  tests, including the pre-terms rejection and the exact `terms_snapshot`
+  contents.
+- **`content_items.rights_status` stays completely untouched by license
+  creation** — same reasoning Milestone 12 already established for access
+  requests: a content item can have many concurrent licenses to different
+  buyers (1:many), so advancing a single-valued `rights_status` to
+  `LICENSED`/`ACTIVE` here would re-introduce the exact conflation
+  Milestone 12 rejected. `lib/rights/state-machine.ts`'s comments are
+  updated to say so explicitly: `LICENSE_REQUESTED`/`LICENSED`/`ACTIVE`
+  are now documented as permanent graph-only nodes that this
+  implementation has decided will never be triggered, not merely "not yet
+  triggered." Verified live: `rights_status` stayed `'LISTED'` through
+  approval and license creation.
+- **Read-only listing endpoints and dashboard surfacing**:
+  `GET /api/creator/licenses`, `GET /api/buyer/licenses`, and both
+  dashboards now show a real "Licenses" section (still all
+  `pending_payment` until Milestone 15) in place of the old placeholder
+  cards. The creator dashboard also links each content item to a new
+  `/creator/content/[id]/licensing-terms` form (Screen C05), following
+  the same minimal blank-form-that-PATCH-upserts pattern as the existing
+  profile-edit pages.
+- **Not built in this milestone, deliberately**: buyer-side "accept
+  terms" UI (the `license.accept_terms_own` capability already sits
+  unused in the Milestone 4 permissions matrix) — the schema has no
+  "awaiting acceptance" `license_status` value, and the spec's own
+  workflow bullet doesn't describe a separate acceptance step before
+  payment, so this is left for Milestone 15 (Payments) to define if it
+  turns out to be needed, rather than inventing a status/flow now.
+
 ## Data model (Milestone 2)
 
 All tables from `docs/AI_KNOWLEDGE_LICENSING_SPECIFICATION.md` Section 4
@@ -831,3 +897,38 @@ it to `WITHDRAWN`. Test data from these live calls was deleted from the
 dev database afterward. The `ACTIVE -> WITHDRAWN` safety property (no
 direct edge) is verified by a dedicated unit test rather than live,
 since no code path can reach `ACTIVE` yet.
+
+**Milestone 14 specifically:** `npm run typecheck`/`lint`/`test`
+(98/98 — 93 prior + 5 new licensing-terms schema tests), `npm run
+test:integration` (94/94 — 85 prior + 9 new: `setLicensingTerms`/
+`getLicensingTermsForCreator` covering the default commission split,
+upsert-not-duplicate, cross-creator rejection, and create-vs-update audit
+log entries; `listLicensesForCreator`/`listLicensesForBuyer` scoping; and
+new `approveAccessRequest` cases for the pre-terms rejection, no-license-
+on-reject, and the license's exact `terms_snapshot` contents), `npm run
+migrate` (no new migration — this milestone is pure application logic
+against the existing `licensing_terms`/`licenses` tables), and `npm run
+build` all pass with the new routes/pages compiled in. Live-verified end
+to end with `curl` across a real creator and a real buyer account:
+approving a request before licensing terms were set correctly `422`'d
+with "set licensing terms for this content before approving requests";
+`GET .../licensing-terms` returned `{"terms": null}` beforehand; `PATCH`-
+setting terms returned `creator_share_percent: "80.00"` /
+`platform_share_percent: "20.00"` without either ever being sent in the
+request body; approving afterward succeeded and both
+`GET /api/creator/licenses` and `GET /api/buyer/licenses` returned the
+same license (`status: "pending_payment"`, the real `terms_snapshot`),
+correctly scoped to each side; both dashboards rendered the real license
+data server-side; and `content_items.rights_status` stayed `'LISTED'`
+throughout. Test data from these live calls was deleted from the dev
+database afterward. One regression caught and fixed during this
+milestone's own verification, not by a pre-written test: the existing
+`afterEach` cleanup in `access-requests.test.ts`/`licensing.test.ts`
+deleted test users directly, which started failing once those tests
+began creating real `licenses` rows, because `licenses.creator_id`/
+`buyer_id` are `ON DELETE RESTRICT` by design (migration 009 — an
+existing license must never be silently destroyed by deleting its
+creator/buyer). Fixed by deleting the test's own `licenses` rows before
+deleting its users in both files' cleanup, and by manually clearing a
+small backlog of orphaned test users/licenses left behind by test runs
+during this same fix cycle, before the fix landed.

@@ -8,12 +8,25 @@ import {
   getOwnAccessRequestForContent,
 } from "@/lib/buyer/requests";
 import { listAccessRequestsForCreator, approveAccessRequest, rejectAccessRequest } from "@/lib/creator/requests";
+import { setLicensingTerms } from "@/lib/creator/licensing-terms";
+import { DEFAULT_CREATOR_SHARE_PERCENT, DEFAULT_PLATFORM_SHARE_PERCENT } from "@/lib/licensing/commission";
 import { NotFoundError, ValidationError } from "@/lib/errors";
 import type { Session } from "@/lib/auth/session";
+import type { LicenseRow } from "@/lib/db/types";
 
 let createdUserIds: string[] = [];
 
 afterEach(async () => {
+  // licenses.creator_id/buyer_id are ON DELETE RESTRICT by design (migration
+  // 009 — an existing license must never be silently destroyed by deleting
+  // its creator/buyer), so Milestone 14 tests that create a license must
+  // clean it up explicitly before the user delete below can succeed.
+  await query(
+    `DELETE FROM licenses
+     WHERE creator_id IN (SELECT id FROM creator_profiles WHERE user_id = ANY($1::uuid[]))
+        OR buyer_id IN (SELECT id FROM buyer_profiles WHERE user_id = ANY($1::uuid[]))`,
+    [createdUserIds]
+  );
   await query("DELETE FROM users WHERE id = ANY($1::uuid[])", [createdUserIds]);
   createdUserIds = [];
 });
@@ -67,6 +80,14 @@ async function makeListedItem(creator: Session) {
   await query("UPDATE content_items SET rights_status = 'LICENSING_ELIGIBLE' WHERE id = $1", [item.id]);
   await listContentOnMarketplace(creator, item.id);
   return item;
+}
+
+/** Milestone 14: approving a request requires licensing_terms to already exist. */
+async function giveLicensingTerms(creator: Session, contentItemId: string) {
+  return setLicensingTerms(creator, contentItemId, {
+    allowedUseTypes: ["RAG dataset"],
+    commercialStatus: "commercial",
+  });
 }
 
 describe("createAccessRequest", () => {
@@ -167,11 +188,27 @@ describe("approveAccessRequest / rejectAccessRequest", () => {
   it("approves a pending request, owned by the content's creator", async () => {
     const creator = await makeCreatorSession();
     const item = await makeListedItem(creator);
+    await giveLicensingTerms(creator, item.id);
     const buyer = await makeBuyerSession();
     const req = await createAccessRequest(buyer, { ...requestInput, contentItemId: item.id });
 
     const approved = await approveAccessRequest(creator, req.id);
     expect(approved.status).toBe("approved");
+  });
+
+  it("rejects approving a request when the creator hasn't set licensing terms yet", async () => {
+    const creator = await makeCreatorSession();
+    const item = await makeListedItem(creator); // no licensing terms set
+    const buyer = await makeBuyerSession();
+    const req = await createAccessRequest(buyer, { ...requestInput, contentItemId: item.id });
+
+    await expect(approveAccessRequest(creator, req.id)).rejects.toBeInstanceOf(ValidationError);
+
+    // Confirm the request itself is untouched, not left half-resolved.
+    const stillPending = await getOwnAccessRequestForContent(buyer, item.id);
+    expect(stillPending?.status).toBe("pending");
+    const licenses = await query("SELECT id FROM licenses WHERE access_request_id = $1", [req.id]);
+    expect(licenses).toHaveLength(0);
   });
 
   it("rejects a pending request", async () => {
@@ -184,9 +221,22 @@ describe("approveAccessRequest / rejectAccessRequest", () => {
     expect(rejected.status).toBe("rejected");
   });
 
+  it("does not create a license when rejecting a request", async () => {
+    const creator = await makeCreatorSession();
+    const item = await makeListedItem(creator);
+    await giveLicensingTerms(creator, item.id);
+    const buyer = await makeBuyerSession();
+    const req = await createAccessRequest(buyer, { ...requestInput, contentItemId: item.id });
+    await rejectAccessRequest(creator, req.id);
+
+    const licenses = await query("SELECT id FROM licenses WHERE access_request_id = $1", [req.id]);
+    expect(licenses).toHaveLength(0);
+  });
+
   it("rejects re-resolving an already-resolved request", async () => {
     const creator = await makeCreatorSession();
     const item = await makeListedItem(creator);
+    await giveLicensingTerms(creator, item.id);
     const buyer = await makeBuyerSession();
     const req = await createAccessRequest(buyer, { ...requestInput, contentItemId: item.id });
     await approveAccessRequest(creator, req.id);
@@ -198,6 +248,7 @@ describe("approveAccessRequest / rejectAccessRequest", () => {
   it("rejects a different creator from approving/rejecting someone else's content's request", async () => {
     const creator = await makeCreatorSession();
     const item = await makeListedItem(creator);
+    await giveLicensingTerms(creator, item.id);
     const buyer = await makeBuyerSession();
     const req = await createAccessRequest(buyer, { ...requestInput, contentItemId: item.id });
 
@@ -213,6 +264,7 @@ describe("approveAccessRequest / rejectAccessRequest", () => {
   it("writes audit log entries for approve/reject", async () => {
     const creator = await makeCreatorSession();
     const item = await makeListedItem(creator);
+    await giveLicensingTerms(creator, item.id);
     const buyer = await makeBuyerSession();
     const req = await createAccessRequest(buyer, { ...requestInput, contentItemId: item.id });
     await approveAccessRequest(creator, req.id);
@@ -227,6 +279,7 @@ describe("approveAccessRequest / rejectAccessRequest", () => {
   it("never changes content_items.rights_status as a side effect of approval", async () => {
     const creator = await makeCreatorSession();
     const item = await makeListedItem(creator);
+    await giveLicensingTerms(creator, item.id);
     const buyer = await makeBuyerSession();
     const req = await createAccessRequest(buyer, { ...requestInput, contentItemId: item.id });
     await approveAccessRequest(creator, req.id);
@@ -235,5 +288,32 @@ describe("approveAccessRequest / rejectAccessRequest", () => {
       item.id,
     ]);
     expect(row?.rights_status).toBe("LISTED");
+  });
+
+  it("creates a license with a terms_snapshot and pending_payment status on approval", async () => {
+    const creator = await makeCreatorSession();
+    const item = await makeListedItem(creator);
+    await giveLicensingTerms(creator, item.id);
+    const buyer = await makeBuyerSession();
+    const req = await createAccessRequest(buyer, { ...requestInput, contentItemId: item.id });
+    await approveAccessRequest(creator, req.id);
+
+    const [license] = await query<LicenseRow>("SELECT * FROM licenses WHERE access_request_id = $1", [req.id]);
+    expect(license).toBeTruthy();
+    expect(license!.content_item_id).toBe(item.id);
+    expect(license!.status).toBe("pending_payment");
+    expect(license!.license_type).toBe("standard");
+    expect(license!.terms_snapshot).toMatchObject({
+      allowed_use_types: ["RAG dataset"],
+      commercial_status: "commercial",
+      creator_share_percent: String(DEFAULT_CREATOR_SHARE_PERCENT) + ".00",
+      platform_share_percent: String(DEFAULT_PLATFORM_SHARE_PERCENT) + ".00",
+    });
+
+    const [log] = await query<{ action: string }>(
+      "SELECT action FROM audit_logs WHERE entity_id = $1 AND action = 'license.create'",
+      [license!.id]
+    );
+    expect(log?.action).toBe("license.create");
   });
 });
