@@ -4,9 +4,9 @@ import type { CreatorProfileRow } from "@/lib/db/types";
 
 /**
  * verification_status is deliberately NOT a field on this schema — it is
- * admin-controlled only (Milestone 18). A client-supplied value in the
- * request body is silently ignored, not just rejected, because this
- * schema never reads it.
+ * admin-controlled only (see lib/admin/verification.ts, Milestone 18). A
+ * client-supplied value in the request body is silently ignored, not
+ * just rejected, because this schema never reads it.
  */
 export const creatorProfileSchema = z.object({
   displayName: z.string().trim().min(1).max(200),

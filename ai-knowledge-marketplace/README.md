@@ -403,10 +403,11 @@ product:
   transition is legal).
 - **A real, stated gap, not a silently cut corner:** this does **not**
   check `content_items.status` (the admin content-moderation gate) —
-  because nothing can ever set it to `'approved'` yet; Milestone 18
+  because nothing can ever set it to `'approved'` yet; Milestone 17
   (Admin) doesn't exist. Anything a creator lists today goes live with
   zero moderation review. This must be closed before real users are
-  onboarded, and is flagged here exactly so it isn't forgotten.
+  onboarded, and is flagged here exactly so it isn't forgotten. (Closed
+  in Milestone 17 — see that section below.)
 - **Unlisting** (`LISTED → WITHDRAWN`) exists for symmetry/demo
   completeness — safe to add now because nothing can be licensed yet
   (Milestone 13's much harder "must not invalidate an active license"
@@ -855,6 +856,63 @@ product:
   nothing in the app currently gates on). Both are real gaps for a
   production launch, not corners cut silently.
 
+## Audit/security hardening (Milestone 18)
+
+- **Closes a two-milestone-old, explicitly-anticipated gap**:
+  `lib/creator/profile.ts` (Milestone 5) and `lib/buyer/profile.ts`
+  (Milestone 11) both already said `verification_status` was
+  "admin-controlled only" — one said Milestone 17, one said Milestone
+  18. Milestone 17 explicitly descoped it as a future item; landing it
+  here rather than deferring a third time. `lib/admin/verification.ts`
+  adds `listCreatorProfilesForReview`/`listBuyerProfilesForReview` and
+  `verify*`/`reject*` for both profile types, mirroring the "manual
+  admin action acceptable for v1" pattern Milestone 17 already
+  established for content takedowns. There's no user-facing "request
+  verification" step (nothing gates on `'pending'` either) — an admin
+  can act on any profile directly. Setting the *same* status twice is
+  rejected (`422`), not a silent no-op, so the audit trail only records
+  real decisions. Surfaced on `/admin/dashboard` as a "Verification
+  queue" filtered to `unverified`/`pending` profiles.
+- **Real HTTP security headers, verified with an actual headless
+  browser, not just a curl header check**: `next.config.mjs` now sets a
+  genuine `Content-Security-Policy` (`default-src 'self'`, no external
+  script/style/font/frame sources, `frame-ancestors 'none'`, `object-src
+  'none'`, `form-action 'self'`) plus `Strict-Transport-Security`,
+  `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
+  `Referrer-Policy: strict-origin-when-cross-origin`, and a restrictive
+  `Permissions-Policy`. **One real, stated tradeoff**: `script-src`/
+  `style-src` still need `'unsafe-inline'` — Next.js's App Router injects
+  inline hydration scripts and this app doesn't generate per-request CSP
+  nonces yet (that needs a nonce threaded through middleware into every
+  page, real added complexity). A stricter nonce-based `script-src` is
+  genuine follow-up work, not solved here; everything else in the policy
+  is as strict as the app actually needs.
+- **Dependency vulnerabilities: documented, deliberately not
+  force-upgraded.** `npm audit` reports 9 findings (1 critical, 6 high, 2
+  moderate) as of this milestone: `vitest`/`vite`/`vite-node`/`esbuild`
+  (dev/test tooling only) and, more significantly, `next` itself
+  (SSRF/cache-poisoning/DoS-class CVEs in real request-handling paths).
+  Every fix `npm audit` offers requires a major version bump (Next.js
+  14→16, Vitest 1→4) — `npm audit fix --force` was deliberately **not**
+  run: a framework major upgrade is a large, separate, high-risk
+  migration effort (breaking API changes across 17 milestones of code),
+  not something to do blindly inside a hardening pass. This is a real,
+  flagged gap requiring its own dedicated upgrade-and-regression-test
+  effort, not a silently-skipped one.
+- **Stale-reference cleanup**: two README passages and two `lib/*/profile.ts`
+  comments said "Milestone 18" or "Milestone 17" inconsistently for
+  content moderation and verification review, written before this
+  session's roadmap had actually settled those numbers. Corrected to
+  match what actually shipped where.
+- **Not built in this milestone, deliberately** (same descope Milestone
+  17 already named, still open): broader "view everything" admin panels
+  for access requests/licenses/transactions (the `*.review_any`
+  capabilities in `lib/auth/permissions.ts`, still unused). Also out of
+  scope: expanding rate limiting beyond the auth endpoints it already
+  covers (Milestone 3) — the spec's rate-limiting requirement was
+  specifically for auth endpoints, and blanket rate-limiting every route
+  wasn't asked for or justified by anything found during this review.
+
 ## Data model (Milestone 2)
 
 All tables from `docs/AI_KNOWLEDGE_LICENSING_SPECIFICATION.md` Section 4
@@ -869,9 +927,10 @@ down explicitly in the source documents):
   requests belong to the *profile* entity.
 - **Two independent status columns on `content_items`:** `status`
   (admin content-moderation gate: draft/pending_review/approved/rejected/
-  suspended — Milestone 18) and `rights_status` (the 12+2-state rights
-  machine from the spec — Milestone 13 owns the transition guards; this
-  migration only defines the enum values).
+  suspended — Milestone 17 owns the actual moderation actions) and
+  `rights_status` (the 12+2-state rights machine from the spec —
+  Milestone 13 owns the transition guards; this migration only defines
+  the enum values).
 - **Financial integrity is enforced by the database, not just app code:**
   `licensing_terms` requires `creator_share_percent + platform_share_percent
   = 100`; `transactions` requires `buyer_amount = platform_fee +
@@ -1189,3 +1248,27 @@ creator's next real sign-in attempt to fail with the same generic
 actual NextAuth credentials callback, not inferred). Test data —
 including the seeded admin account — was deleted from the dev database
 afterward.
+
+**Milestone 18 specifically:** `npm run typecheck`/`lint`/`test`
+(106/106, unchanged — no new input schema), `npm run test:integration`
+(138/138 — 130 prior + 8 new covering both verify/reject paths for both
+profile types, the same-status-twice rejection, changing a decision,
+404/403 cases, and distinct audit log entries per profile type), `npm
+run migrate` (no new migration — pure application logic against the
+existing `verification_status` column), and `npm run build` all pass
+with the six new admin API routes compiled in. Live-verified end to end
+with `curl` and a real seeded admin account: a fresh creator profile
+listed as `unverified` in `GET /api/admin/creator-profiles`; a
+**non-admin** got a real `403` on the same endpoint; verifying it
+returned `verification_status: "verified"`; verifying it again correctly
+`422`'d ("Profile is already 'verified'"). The security headers were
+verified two ways beyond a plain curl header check: `curl -I` confirmed
+all six headers present with the exact configured values, and a real
+headless-browser load (Playwright/Chromium) of the public marketplace,
+signin/signup pages, and the **signed-in** creator and buyer dashboards
+(via injected session cookies from real logins) showed zero
+CSP-related console errors across all of them — the only console error
+seen anywhere was an unrelated pre-existing `/favicon.ico` 404, confirmed
+via a direct `curl` and unrelated to this milestone's changes. Test data
+(including the CSP-check accounts and the seeded admin) was deleted from
+the dev database afterward.

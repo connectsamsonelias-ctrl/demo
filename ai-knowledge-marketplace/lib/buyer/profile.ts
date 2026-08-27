@@ -8,8 +8,9 @@ import type { BuyerProfileRow } from "@/lib/db/types";
  * /api/creator/profile but has no buyer equivalent, even though
  * buyer_profiles has existed since Milestone 2 and Screen B02 requires
  * these fields. verification_status is deliberately NOT a field here —
- * admin-controlled only (Milestone 17), silently dropped by zod rather
- * than merely rejected if a client sends it.
+ * admin-controlled only (see lib/admin/verification.ts, Milestone 18),
+ * silently dropped by zod rather than merely rejected if a client sends
+ * it.
  */
 export const buyerProfileSchema = z.object({
   organizationName: z.string().trim().min(1).max(200),
