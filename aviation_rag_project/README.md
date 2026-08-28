@@ -486,3 +486,19 @@ pytest tests/ -v
   Framework (MIF) call or a local SQLite mirror.
 - Hybrid BM25 + vector search and a cross-encoder reranker, per the
   playbook's Milestone 2.
+- **Upgrade the local LLM once running on better hardware.** Qwen2.5 1.5B
+  was chosen specifically because it's the largest model this project's
+  dev laptop (dual-core CPU, no GPU) could run at all - current guidance
+  is blunt that "anything above 4B on CPU is essentially a batch job, not
+  a chat." On hardware with a GPU (or just a stronger CPU), revisit with:
+  - **Gemma 3 2B** (Google) - smallest step up, reportedly the fastest
+  - **Llama 3.2 3B** (Meta) - often the best general-quality pick at this size
+  - **Phi-4 Mini 3.8B** (Microsoft) - punches above its size on reasoning,
+    which may specifically help with the compound-question refusal issue
+    observed during testing (the model incorrectly said "DATA NOT FOUND"
+    on a multi-part question even though the retrieved dossier contained
+    everything needed - a false-negative, not a hallucination, but still
+    a real reliability gap worth re-testing with a stronger model)
+  All are free, open-weight, and Ollama-compatible - swap via `OLLAMA_MODEL`
+  in `.env` and rebuild `docker/Dockerfile.ollama`, same as any other model
+  change (see Stage F).
