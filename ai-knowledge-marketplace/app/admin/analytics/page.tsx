@@ -64,8 +64,8 @@ export default async function AdminAnalyticsPage() {
     <div className="max-w-3xl">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Platform analytics</h1>
-        <a href="/admin/dashboard" className="text-sm underline">
-          ← Admin dashboard
+        <a href="/dashboard" className="text-sm underline">
+          ← Dashboard
         </a>
       </div>
 

@@ -25,7 +25,7 @@ export default function EditCreatorProfilePage() {
       setError(body?.error?.message ?? "Something went wrong.");
       return;
     }
-    router.push("/creator/dashboard");
+    router.push("/dashboard");
     router.refresh();
   }
 

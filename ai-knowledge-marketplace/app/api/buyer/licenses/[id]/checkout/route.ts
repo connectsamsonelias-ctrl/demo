@@ -20,8 +20,8 @@ export async function POST(request: Request, { params }: { params: { id: string 
 
     const origin = new URL(request.url).origin;
     const { checkoutUrl } = await startCheckoutForLicense(session, parsed.data, {
-      successUrl: `${origin}/buyer/dashboard?checkout=success`,
-      cancelUrl: `${origin}/buyer/dashboard?checkout=cancelled`,
+      successUrl: `${origin}/dashboard?checkout=success`,
+      cancelUrl: `${origin}/dashboard?checkout=cancelled`,
     });
     return Response.json({ checkoutUrl });
   } catch (err) {

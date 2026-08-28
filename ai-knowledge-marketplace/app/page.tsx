@@ -14,14 +14,11 @@ export default function HomePage() {
         <a href="/signin" className="underline">
           Sign in
         </a>
-        <a href="/creator/dashboard" className="underline">
-          Creator dashboard
+        <a href="/dashboard" className="underline">
+          Dashboard
         </a>
         <a href="/marketplace" className="underline">
           Browse marketplace
-        </a>
-        <a href="/buyer/dashboard" className="underline">
-          Buyer dashboard
         </a>
       </div>
     </div>

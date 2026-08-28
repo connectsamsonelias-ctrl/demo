@@ -1008,6 +1008,57 @@ product:
   front of real users — this milestone's job was to make the *code*
   launch-ready, not to resolve those.
 
+## Unified dashboard (post-roadmap)
+
+- **Not one of the original 20 milestones** — added afterward, for a
+  real end-to-end simulation across the user's own accounts (creator,
+  buyer, admin on separate devices) that needed one shared UI surface
+  with role-based visibility, rather than three separate dashboard URLs.
+- **`/dashboard` is now the single entry point for every role.**
+  `app/dashboard/page.tsx` gets the session, then renders one of three
+  view components (`CreatorDashboard`/`BuyerDashboard`/`AdminDashboard`)
+  entirely based on `session.role` — same URL, different content, same
+  underlying `lib/*` calls and same tested behavior as before. Nothing
+  about *what* each role can do changed, only *where* it lives.
+- **A real, latent bug fixed as a side effect**: `app/signin/page.tsx`
+  unconditionally pushed every successful sign-in to `/creator/dashboard`
+  — which then redirected non-creators to `/` — so a buyer or admin
+  signing in landed on the marketing placeholder page, not their own
+  dashboard. Never caught because every live-verification walkthrough in
+  this project so far happened to check each role by directly requesting
+  its own dashboard URL, not by simulating the actual sign-in flow's
+  redirect target. Signin now pushes to `/dashboard` unconditionally, and
+  role-branching happens in exactly one place.
+- **The old `/creator/dashboard`, `/buyer/dashboard`, `/admin/dashboard`
+  URLs still work** — each is now a one-line `redirect("/dashboard")`,
+  so nothing with them bookmarked breaks. Verified live with a real
+  headless-browser navigation (curl can't observe this correctly: Next
+  statically optimizes a page whose only job is an unconditional
+  `redirect()`, so the redirect resolves through the framework's client
+  router, not a raw HTTP 3xx — Playwright confirmed the real behavior a
+  browser actually gets).
+- The five shared interactive client components (`SignOutButton`,
+  `RunAuditButton`, `ListingButton`, `RequestActions`, `PayNowButton`,
+  `ActionButton`) were moved (not duplicated) into `app/dashboard/` — a
+  git `mv`, not new code, so their tested request/response behavior is
+  unchanged.
+- All other internal links/redirects pointing at the three old dashboard
+  paths were updated to `/dashboard` — including one the initial pass
+  missed and a second grep caught: the buyer checkout endpoint's
+  server-computed Stripe success/cancel redirect URLs
+  (`app/api/buyer/licenses/[id]/checkout/route.ts`).
+- Verified live end to end with three real accounts (creator, buyer,
+  admin) signed in simultaneously: each hitting `GET /dashboard` got its
+  own correct view; a signed-out request got a real `307` to `/signin`;
+  the admin's Approve action (through the *moved* `ActionButton`
+  component) correctly flipped a real content item's moderation status,
+  immediately visible on the creator's own `/dashboard` view afterward.
+  No new database migration, no schema change — this was a routing/UI
+  consolidation only. `npm run typecheck`/`lint`/`test` (106/106,
+  unchanged)/`test:integration` (144/144, unchanged — no test referenced
+  the old page paths)/`build` all pass. Test data was deleted from the
+  dev database afterward.
+
 ## Launch checklist
 
 This is the last of the original 20 milestones. Everything below is a

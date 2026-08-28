@@ -32,7 +32,7 @@ export default function EditBuyerProfilePage() {
       setError(body?.error?.message ?? "Something went wrong.");
       return;
     }
-    router.push("/buyer/dashboard");
+    router.push("/dashboard");
     router.refresh();
   }
 
