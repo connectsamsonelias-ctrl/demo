@@ -19,6 +19,14 @@ services:
       # (ENV in the Dockerfile) - set again here so it's obvious from this
       # file alone that no analytics call is made at runtime.
       - ANONYMIZED_TELEMETRY=FALSE
+      # LLM generation is off unless explicitly turned on in .env - keeps
+      # this a zero-risk addition to an already-working setup. No
+      # depends_on relationship to the ollama service below: app/llm.py
+      # already fails soft (falls back to the raw retrieved dossier) if
+      # Ollama isn't running, so there's nothing to hard-wire here.
+      - LLM_ENABLED=${LLM_ENABLED:-false}
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen2.5:1.5b-instruct}
     volumes:
       # Standalone ChromaDB persistent storage: its own named volume,
       # independent of the app container's filesystem, so the vector
@@ -33,6 +41,30 @@ services:
       - aviation_rag_net
     # No external network egress required - this is a fully air-gapped
     # local service once the image is built.
+
+  ollama:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.ollama
+      args:
+        OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:1.5b-instruct}
+    image: aviation_rag_ollama:latest
+    container_name: aviation_rag_ollama
+    restart: unless-stopped
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - aviation_rag_net
+    # No published port to the host - only the api container (on this
+    # same network) needs to reach it, at http://ollama:11434.
+    #
+    # Optional service: only starts when explicitly requested with
+    # `docker compose --profile llm up --build`. Plain `docker compose up`
+    # (no profile) starts only the api container, exactly as before this
+    # feature existed - real CPU/RAM cost on modest hardware, so it should
+    # be an opt-in, not something that silently starts by default.
+    profiles:
+      - llm
 
 networks:
   aviation_rag_net:
@@ -55,3 +87,4 @@ networks:
 
 volumes:
   chroma_data:
+  ollama_data:

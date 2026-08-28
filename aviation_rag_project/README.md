@@ -15,6 +15,7 @@ aviation_rag_project/
     main.py           <- the FastAPI web server (the "front door")
     models.py          <- defines what a valid request/response looks like
     security.py         <- checks the API key on every request
+    llm.py                <- optional local LLM call (off by default, see Stage F)
     templates/
       index.html          <- the browser chat page a person actually uses
   scripts/
@@ -22,6 +23,7 @@ aviation_rag_project/
     ingest_parsed_chunks.py  <- loads those parsed chunks into the database
   docker/
     Dockerfile         <- recipe to build the app into a container image
+    Dockerfile.ollama  <- recipe for the optional local-LLM container
     docker-compose.yml  <- recipe to run the whole thing with one command
   data/
     manuals/            <- put your source PDFs/text here (read-only in Docker)
@@ -381,6 +383,93 @@ bookmark pointed at `http://localhost:8000` completes that picture - no
 
 ---
 
+## Stage F - A real, locally-hosted LLM generates the answer
+
+Everything up to this point does pure **retrieval**, not generation: the
+system finds the matching chunk of manual text and hands it back
+word-for-word. No AI was writing, paraphrasing, or reasoning about
+anything - that torque value was copy-pasted out of the manual by code,
+not generated. This stage adds an actual local LLM (via
+[Ollama](https://ollama.com), still fully offline) that turns the
+retrieved dossier into a properly generated, natural-language answer.
+
+**Off by default.** This adds real CPU load on top of an already-working
+setup, so it stays opt-in. When disabled (the default), behavior is
+unchanged from Stage E.
+
+**Model choice: Qwen2.5 1.5B, not BharatGen (yet).** BharatGen's Param-1
+was seriously considered (see the earlier conversation) since it fits
+this project's sovereignty framing better than Meta's Llama - but two
+things blocked it for now: its weights carry a **non-commercial license**
+whose terms for a defense/commercial deployment aren't confirmed, and it
+isn't distributed in Ollama's GGUF format. Qwen2.5 1.5B (Apache 2.0, not
+tied to Meta either) is small enough to be plausible on modest CPU-only
+hardware and ships with a working Ollama build today. **Swapping to
+BharatGen later is a one-line config change** (`OLLAMA_MODEL` +
+rebuilding `docker/Dockerfile.ollama` with a GGUF-converted BharatGen
+build) - `app/llm.py` has no model-specific logic in it, and the UI
+doesn't care which model produced the text it's displaying.
+
+**A known, unavoidable tradeoff:** the strict-refusal guardrail
+(`DATA NOT FOUND IN APPROVED MANUAL`) is still enforced entirely in code,
+*before* the LLM is ever called - see below. But once the LLM *is*
+called on a real match, it could in principle still misstate or subtly
+reword something despite the strict system prompt and `temperature=0`.
+That's why the UI always keeps the exact retrieved manual text one click
+away ("Show retrieved source text") rather than replacing it - the
+generated answer is a convenience layer, not the system of record.
+
+### How it's wired in
+
+- `app/llm.py`: sends the retrieved dossier + question to Ollama's local
+  `/api/chat` endpoint with `temperature=0.0` and a system prompt that
+  instructs the model to answer only from the given context. Fails soft
+  (returns `None`, never raises) if Ollama is disabled or unreachable -
+  callers fall back to the raw dossier text, exactly like before this
+  stage existed.
+- `/query`'s response gains a `generated_answer` field, only ever
+  populated when a manual chunk was actually found - **the not-found
+  guardrail path never calls the LLM at all**, so a refusal can never be
+  "softened" into a guess by generation.
+- The chat UI shows the generated answer as the primary bubble (labelled
+  "AI-generated answer (local model)"), with the exact retrieved manual
+  text available in a collapsed "Show retrieved source text" section for
+  verification.
+
+### Turning it on
+
+```bash
+cp .env.example .env    # if you haven't already
+```
+
+Edit `.env` and set:
+
+```
+LLM_ENABLED=true
+```
+
+Then start with the `llm` profile so the Ollama container also comes up
+(plain `docker compose up`, no profile, starts only the API - unchanged):
+
+```bash
+docker compose -f docker/docker-compose.yml --env-file .env --profile llm up --build
+```
+
+The first build downloads the base Ollama image and bakes the model in -
+this needs internet, same one-time exception as the embedding model.
+After that, ask a question in the chat UI as before; the answer bubble
+should now read as a written sentence instead of the raw dossier block.
+
+**Confirm before moving on:** given this laptop's CPU, expect an answer
+to take noticeably longer than before - possibly 30-90+ seconds rather
+than instant. If it's unusably slow, that's real information (this
+hardware may not be suited to local LLM inference at all, even at this
+small a model size) - tell me the actual wait time and we'll decide
+whether to try a smaller model, or whether local generation belongs on
+different hardware than the retrieval service.
+
+---
+
 ## Tests
 
 ```bash
@@ -389,11 +478,6 @@ pytest tests/ -v
 
 ## Next steps you may want (not built yet - ask if you want any of these)
 
-- Wiring `/query`'s returned dossier into an actual local LLM (e.g. Ollama
-  running Llama-3-8B, or a locally-hosted BharatGen Param-1/Param2 model)
-  instead of returning the raw retrieved text as-is. The UI already talks
-  to `/query` as a black box, so this plugs in as a backend-only change -
-  the chat page above won't need to be touched or rebuilt for it.
 - Swapping the `data/snag_history.json` mock for a real Maximo Integration
   Framework (MIF) call or a local SQLite mirror.
 - Hybrid BM25 + vector search and a cross-encoder reranker, per the

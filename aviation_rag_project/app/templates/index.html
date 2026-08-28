@@ -142,6 +142,32 @@
     margin-top: 4px;
   }
 
+  .generated-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--accent);
+    margin-bottom: 6px;
+  }
+
+  .source-details {
+    margin-top: 8px;
+  }
+  .source-details summary {
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--muted);
+    padding: 4px 0;
+  }
+  .source-details summary:hover {
+    color: var(--text);
+  }
+  .source-bubble {
+    margin-top: 6px;
+    font-size: 13px;
+    opacity: 0.85;
+  }
+
   .history-box {
     margin-top: 10px;
     padding: 10px 12px;
@@ -290,13 +316,43 @@
     messagesEl.scrollTop = messagesEl.scrollHeight;
   }
 
-  function addSystemMessage({ text, notFound, history }) {
+  function addSystemMessage({ text, notFound, history, generatedAnswer, sourceText }) {
     const div = document.createElement('div');
     div.className = 'msg system' + (notFound ? ' not-found' : '');
-    const bubble = document.createElement('div');
-    bubble.className = 'bubble';
-    bubble.textContent = text;
-    div.appendChild(bubble);
+
+    if (generatedAnswer) {
+      // A local LLM produced this answer from the retrieved manual text -
+      // labelled explicitly so it's never mistaken for a direct manual
+      // quote, and the exact retrieved text stays one click away for
+      // cross-checking.
+      const label = document.createElement('div');
+      label.className = 'generated-label';
+      label.textContent = 'AI-generated answer (local model) — verify against source below';
+      div.appendChild(label);
+
+      const bubble = document.createElement('div');
+      bubble.className = 'bubble';
+      bubble.textContent = generatedAnswer;
+      div.appendChild(bubble);
+
+      if (sourceText) {
+        const details = document.createElement('details');
+        details.className = 'source-details';
+        const summary = document.createElement('summary');
+        summary.textContent = 'Show retrieved source text';
+        details.appendChild(summary);
+        const sourceBubble = document.createElement('div');
+        sourceBubble.className = 'bubble source-bubble';
+        sourceBubble.textContent = sourceText;
+        details.appendChild(sourceBubble);
+        div.appendChild(details);
+      }
+    } else {
+      const bubble = document.createElement('div');
+      bubble.className = 'bubble';
+      bubble.textContent = text;
+      div.appendChild(bubble);
+    }
 
     if (history && history.length > 0) {
       const hbox = document.createElement('div');
@@ -357,7 +413,13 @@
 
       const data = await res.json();
       if (data.found) {
-        addSystemMessage({ text: data.dossier, notFound: false, history: data.history });
+        addSystemMessage({
+          text: data.dossier,
+          notFound: false,
+          history: data.history,
+          generatedAnswer: data.generated_answer,
+          sourceText: data.dossier,
+        });
       } else {
         addSystemMessage({ text: data.message, notFound: true, history: data.history });
       }

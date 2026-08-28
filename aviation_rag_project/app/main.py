@@ -20,6 +20,7 @@ from fastapi import Depends, FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 
+from . import llm
 from .models import MaximoWorkOrderQuery, QueryResponse
 from .rag_engine import AdvancedAviationRAG
 from .security import require_api_key
@@ -89,6 +90,16 @@ def query(payload: MaximoWorkOrderQuery) -> QueryResponse | JSONResponse:
         aircraft_type=payload.aircraft_type,
     )
 
+    # Only ever generate from a dossier that was actually found - the
+    # not-found guardrail response never reaches the LLM, so it can't be
+    # second-guessed or paraphrased into something less strict.
+    generated_answer = None
+    if result["found"]:
+        generated_answer = llm.generate_answer(
+            dossier_text=result["dossier"],
+            question=payload.query_text,
+        )
+
     return QueryResponse(
         wonum=payload.wonum,
         tail_number=payload.tail_number,
@@ -96,4 +107,5 @@ def query(payload: MaximoWorkOrderQuery) -> QueryResponse | JSONResponse:
         message=result["message"],
         dossier=result["dossier"],
         history=result["history"],
+        generated_answer=generated_answer,
     )

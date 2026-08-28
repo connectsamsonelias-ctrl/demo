@@ -38,3 +38,9 @@ class QueryResponse(BaseModel):
     message: str
     dossier: str | None = None
     history: list[dict] = []
+    generated_answer: str | None = Field(
+        default=None,
+        description="Natural-language answer from the local LLM, when LLM_ENABLED=true "
+        "and generation succeeds. None when disabled, unreachable, or the manual "
+        "chunk wasn't found - callers should fall back to `dossier` in that case.",
+    )
