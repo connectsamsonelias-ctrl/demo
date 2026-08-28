@@ -27,6 +27,10 @@ services:
       - LLM_ENABLED=${LLM_ENABLED:-false}
       - OLLAMA_BASE_URL=http://ollama:11434
       - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen2.5:1.5b-instruct}
+      # 300s default - measured ~2 minutes for a single answer on real
+      # low-power CPU-only hardware (see app/llm.py). Raise further if
+      # you still see timeouts on slower machines.
+      - OLLAMA_TIMEOUT_SECONDS=${OLLAMA_TIMEOUT_SECONDS:-300}
     volumes:
       # Standalone ChromaDB persistent storage: its own named volume,
       # independent of the app container's filesystem, so the vector

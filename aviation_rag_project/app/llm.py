@@ -55,7 +55,14 @@ def generate_answer(dossier_text: str, question: str) -> str | None:
 
     ollama_base_url = os.environ.get("OLLAMA_BASE_URL", "http://ollama:11434")
     ollama_model = os.environ.get("OLLAMA_MODEL", "qwen2.5:1.5b-instruct")
-    timeout_seconds = float(os.environ.get("OLLAMA_TIMEOUT_SECONDS", "120"))
+    # 300s default, not the more typical 30-60s: measured on real
+    # low-power CPU-only hardware (a dual-core laptop with no GPU), a
+    # 1.5B model took ~2 minutes to answer even once "warm" - the first
+    # request on a freshly-started container can take longer still while
+    # the model is first loaded into memory. A short timeout here doesn't
+    # make answers arrive faster, it just turns a slow-but-working answer
+    # into a silent fallback to the raw dossier text.
+    timeout_seconds = float(os.environ.get("OLLAMA_TIMEOUT_SECONDS", "300"))
 
     try:
         response = httpx.post(

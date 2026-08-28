@@ -460,13 +460,17 @@ this needs internet, same one-time exception as the embedding model.
 After that, ask a question in the chat UI as before; the answer bubble
 should now read as a written sentence instead of the raw dossier block.
 
-**Confirm before moving on:** given this laptop's CPU, expect an answer
-to take noticeably longer than before - possibly 30-90+ seconds rather
-than instant. If it's unusably slow, that's real information (this
-hardware may not be suited to local LLM inference at all, even at this
-small a model size) - tell me the actual wait time and we'll decide
-whether to try a smaller model, or whether local generation belongs on
-different hardware than the retrieval service.
+**Measured, not estimated:** on the actual dev laptop this was tested on
+(dual-core AMD A4, no GPU, CPU-only inference), a single answer took
+about **2 minutes**. The first attempt on a freshly-started container
+timed out entirely at the original 120s limit - `app/llm.py`'s timeout is
+now 300s by default specifically because of that. This is real
+information about this class of hardware, not a guess: a small model
+still isn't fast without a GPU. Whether that tradeoff (a properly worded
+answer vs. a ~2 minute wait) is worth it for actual technicians doing
+real maintenance work is a judgment call, not a technical one - the raw
+retrieval path (Stage E, `LLM_ENABLED=false`) stays instant and available
+either way, so this is opt-in, not a replacement.
 
 ---
 
