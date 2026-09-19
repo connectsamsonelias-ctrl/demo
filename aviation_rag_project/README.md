@@ -605,14 +605,16 @@ history, not a standalone feature.
 identifies.** Once RAG + CV + snag analysis identifies that a repair is
 needed (a real defect, with a manual-backed repair procedure), the next
 gap is: are the parts for that repair actually available? This stage
-connects to IMOLS - the Indian Air Force's supply-chain management
-network - to check or reserve spares implied by the repair procedure.
-Integration details (API/interface shape, authentication, what IMOLS
-actually exposes) are not yet confirmed, same category as the Maximo
-work-order integration this project already assumes the shape of. Scope
-not yet defined: whether this is read-only availability lookup vs.
-actually creating a reservation/requisition is an open question for
-whoever specs this stage.
+connects to IMMOLS (Integrated Materials Management Online System) - the
+IAF's real-time digital inventory network, tracking spare parts, tools,
+and equipment across bases specifically to cut "Aircraft on Ground" (AOG)
+delays - to check or reserve spares implied by the repair procedure.
+Integration details (API/interface shape, authentication, what IMMOLS
+actually exposes to an external system like this one) are not yet
+confirmed, same category as the Maximo work-order integration this
+project already assumes the shape of. Scope not yet defined: whether this
+is read-only availability lookup vs. actually creating a
+reservation/requisition is an open question for whoever specs this stage.
 
 **Stage J - A separate operations model, deliberately not merged into
 this one.** The plan is a distinct model built around *operational*
