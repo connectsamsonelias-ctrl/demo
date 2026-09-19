@@ -2,6 +2,12 @@
 
 _Last updated: 2026-09-19_
 
+**Naming note:** queries below reference "snag history" - in this
+deployment's setup that data is planned to eventually come from Maximo,
+since Maximo is the EMMS framework/implementation in use here, not a
+separate EMMS system (see `docs/architecture.md`, "Current stage"). Today
+it's still `data/snag_history.json`, a mock file, unaffected by this.
+
 This tracks retrieval and refusal accuracy over time. **There is currently
 no automated evaluation harness** — the numbers below come from manual
 testing during development, not a scripted, repeatable test runner. That

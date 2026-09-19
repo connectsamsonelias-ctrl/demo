@@ -2,6 +2,13 @@
 
 _Last updated: 2026-09-19_
 
+**Naming note:** the EDGE-1 entry below references "snag history" data -
+in this deployment's setup that's planned to eventually come from
+Maximo, since Maximo is the EMMS framework/implementation in use here,
+not a separate EMMS system (see `docs/architecture.md`, "Current stage").
+Today it's still `data/snag_history.json`, a mock file, unaffected by
+this.
+
 A running, append-only log of specific failures found during testing.
 Entries are dated and never removed, even after being fixed — this is a
 record of how the system's reliability has actually evolved, not just its
