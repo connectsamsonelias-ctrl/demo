@@ -581,6 +581,56 @@ detections from a model that's never seen an aircraft.
 
 ---
 
+## Roadmap: what comes after Stage G
+
+None of the stages below are built. This section exists so the direction
+is written down and doesn't have to be re-explained every session -
+update it as the plan changes, and delete a stage's entry here once it
+gets its own real `## Stage H` (etc.) writeup with actual code.
+
+**Stage H - Snag history becomes an analysis layer, not just a history
+dump.** `data/snag_history.json` today is a flat, mock per-aircraft fault
+list that gets pasted verbatim into the dossier (see Retrieval pipeline in
+`docs/architecture.md`) - it's shown, never analyzed. The plan is for past
+snags on the *same tail number/component* to actively shape the response:
+e.g. a CV-flagged crack on a panel that's had 3 prior crack repairs in the
+same location should surface that pattern explicitly (recurring defect,
+not a one-off), rather than the LLM/retrieval treating each query as
+independent. This depends on Stage G actually having a fine-tuned CV
+model and real snag data to analyze - it's a natural next step specifically
+*because* CV gives you a defect type/location to correlate against
+history, not a standalone feature.
+
+**Stage I - Spare-parts / supply-chain integration for repairs the system
+identifies.** Once RAG + CV + snag analysis identifies that a repair is
+needed (a real defect, with a manual-backed repair procedure), the next
+gap is: are the parts for that repair actually available? This stage
+connects to the organization's supply-chain/inventory system (referred to
+in conversation as "Immols" - name and integration details not yet
+confirmed, same category as the Maximo work-order integration this
+project already assumes the shape of) to check or reserve spares implied
+by the repair procedure. Scope not yet defined: whether this is
+read-only availability lookup vs. actually creating a reservation/requisition
+is an open question for whoever specs this stage.
+
+**Stage J - A separate operations model, deliberately not merged into
+this one.** The plan is a distinct model built around *operational*
+parameters (flight schedules, turnaround times, aircraft availability/
+utilization) that has an **interdependency** with the maintenance stack
+above - e.g. a flagged defect's urgency should be informed by "this
+tail number flies again in 6 hours" - without collapsing maintenance and
+operations logic into one system. Keeping it separate mirrors this
+project's existing pattern of small, single-purpose services (`cv_service`
+next to `app`, not folded into it) rather than one growing monolith - the
+two models would call into each other, not share code.
+
+Order matters here: H needs a real CV model (Stage G) to have something
+concrete to correlate; I needs H's "a repair is needed" signal to know
+what to check stock for; J is the most independent of the three and could
+in principle start any time, but its value is highest once I exists (an
+operational deadline is most useful when it's actually competing against a
+real parts-availability constraint).
+
 ## Tests
 
 ```bash
