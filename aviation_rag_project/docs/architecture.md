@@ -178,7 +178,13 @@ Stated plainly, without inflating maturity:
   a hand-written stand-in for what would be a Maximo relational query.
   The `/query` payload shape matches Maximo's expected work-order fields,
   but there is no live Maximo Integration Framework (MIF) connection -
-  that integration has not been built.
+  that integration has not been built. **Note on naming:** in this
+  deployment's setup, EMMS and Maximo are not two separate systems -
+  Maximo is the EMMS framework/implementation in use here. So the
+  planned Stage H work (README) - pulling real snag/fault history instead
+  of this mock file - is the *same* Maximo/MIF integration named above,
+  extended to also cover fault history, not a second system to build or
+  spec separately.
 - **No load testing, no concurrency testing.** The system has been
   exercised by one person, one request at a time, on two personal Windows
   laptops (via Docker Desktop/WSL2). Behaviour under concurrent requests,
