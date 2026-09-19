@@ -591,15 +591,19 @@ gets its own real `## Stage H` (etc.) writeup with actual code.
 **Stage H - Snag history becomes an analysis layer, not just a history
 dump.** `data/snag_history.json` today is a flat, mock per-aircraft fault
 list that gets pasted verbatim into the dossier (see Retrieval pipeline in
-`docs/architecture.md`) - it's shown, never analyzed. The plan is for past
-snags on the *same tail number/component* to actively shape the response:
-e.g. a CV-flagged crack on a panel that's had 3 prior crack repairs in the
-same location should surface that pattern explicitly (recurring defect,
-not a one-off), rather than the LLM/retrieval treating each query as
-independent. This depends on Stage G actually having a fine-tuned CV
-model and real snag data to analyze - it's a natural next step specifically
-*because* CV gives you a defect type/location to correlate against
-history, not a standalone feature.
+`docs/architecture.md`) - it's shown, never analyzed. The plan is for that
+mock file to be replaced by a real feed from **EMMS** (the IAF's
+Engineering/Equipment Maintenance Management System - integration shape
+not yet confirmed, same "needs a real spec from the system owner" caveat
+as IMMOLS below), and for past snags on the *same tail number/component*
+to then actively shape the response: e.g. a CV-flagged crack on a panel
+that's had 3 prior crack repairs in the same location should surface that
+pattern explicitly (recurring defect, not a one-off), rather than the
+LLM/retrieval treating each query as independent. This depends on Stage G
+actually having a fine-tuned CV model and on the EMMS feed actually
+existing - it's a natural next step specifically *because* CV gives you a
+defect type/location to correlate against history, not a standalone
+feature.
 
 **Stage I - Spare-parts / supply-chain integration for repairs the system
 identifies.** Once RAG + CV + snag analysis identifies that a repair is
