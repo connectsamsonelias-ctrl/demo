@@ -29,12 +29,22 @@ aviation_rag_project/
     manuals/            <- put your source PDFs/text here (read-only in Docker)
     snag_history.json    <- mock per-aircraft fault history (swap for real Maximo data later)
   tests/                <- automated checks that prove the code works
+  docs/
+    architecture.md         <- how it actually works, and current maturity
+    evaluation.md            <- the test query set + tracked accuracy/latency over time
+    failure-modes.md          <- dated log of real failures found, and their status
   requirements.txt       <- list of Python packages this project needs
   .env.example            <- template for secret/config values
 ```
 
 You do not need to understand Docker or FastAPI deeply to run this - follow
-the stages below in order.
+the stages below in order. If you want the deeper technical picture -
+exactly how retrieval and refusal work, what's been tested, and what's
+known not to work yet - read `docs/architecture.md`, `docs/evaluation.md`,
+and `docs/failure-modes.md` first; this README is the "how to run it"
+guide, those are the "how it works and how well" record. Update all three
+docs whenever a meaningful change is made (not just at release points),
+per the project's documentation policy.
 
 ---
 
