@@ -88,6 +88,26 @@ present and correct.
 
 ---
 
+## 2026-09-19 — CV first-pass defect check added: no failures to log yet, by design
+
+Not a failure entry — recorded here so the gap is visible rather than
+silent. The CV defect-detection feature (`cv_service/`, `/query/image`)
+was added this date, but `models/defect_yolo.pt` does not exist -
+`scripts/train_defect_model.py` has not been run anywhere, since training
+requires GPU compute this project's dev sandbox doesn't have and hasn't
+been tested on the reference deployment laptops either. The pipeline was
+verified end-to-end with a stock, non-fine-tuned YOLOv8n checkpoint,
+which correctly proves the *wiring* but cannot meaningfully "fail" or
+"succeed" at aircraft defect detection - it was never trained to attempt
+that task. **The categories this doc is meant to track (adversarial
+queries, outdated part numbers, similar-sounding components, multi-manual
+conflicts, partial matches) do not yet apply to the CV path** and won't
+until a real fine-tuned model exists and is exercised against real
+defect photos. First real CV-specific entry should appear once that
+happens - don't backfill one before then.
+
+---
+
 ## Template for future entries
 
 ```markdown

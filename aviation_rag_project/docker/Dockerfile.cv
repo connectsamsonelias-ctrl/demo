@@ -1,0 +1,48 @@
+# Standalone CV defect-detection service. Kept out of the main api image
+# so that torch/ultralytics (large) stay fully opt-in - same pattern as
+# the optional ollama service (docker/Dockerfile.ollama).
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+# libgl1 / libglib2.0-0: required by opencv-python (an ultralytics
+# dependency) - without these, "import cv2" fails at runtime with a
+# missing shared library error that has nothing to do with the model itself.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgl1 \
+    libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY docker/requirements-cv.txt .
+RUN pip install --no-cache-dir -r requirements-cv.txt
+
+RUN useradd --create-home --shell /bin/bash appuser
+
+COPY --chown=appuser:appuser cv_service ./cv_service
+
+# Fine-tuned model weights: baked into the image at build time, same
+# air-gap principle as the embedding/LLM models elsewhere in this
+# project - the running container never downloads anything.
+#
+# `models/` is copied as a DIRECTORY (not a specific file) so the build
+# succeeds whether or not defect_yolo.pt exists yet inside it - as of
+# this writing it does not (see scripts/train_defect_model.py). Until
+# it's produced and placed there before building this image, the
+# container starts fine but /detect returns 503 with a clear message,
+# rather than either failing the build or silently serving detections
+# from an untrained model.
+COPY --chown=appuser:appuser models ./models
+
+RUN mkdir -p /app/models && chown -R appuser:appuser /app
+
+USER appuser
+
+EXPOSE 8001
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')" || exit 1
+
+CMD ["uvicorn", "cv_service.main:app", "--host", "0.0.0.0", "--port", "8001"]

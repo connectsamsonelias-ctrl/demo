@@ -44,3 +44,39 @@ class QueryResponse(BaseModel):
         "and generation succeeds. None when disabled, unreachable, or the manual "
         "chunk wasn't found - callers should fall back to `dossier` in that case.",
     )
+
+
+CV_TRIAGE_DISCLAIMER = (
+    "TRIAGE AID ONLY - NOT A CERTIFIED INSPECTION DECISION. This is a "
+    "first-pass computer-vision screening result, not a pass/fail "
+    "determination. A qualified human inspector must review the "
+    "component and make the final airworthiness call."
+)
+
+CV_DATASET_DISCLAIMER = (
+    "The defect-detection model was fine-tuned on public research "
+    "datasets (Roboflow: ddiisc/aircraft_skin_defects, "
+    "lemi-debele/aircraft-surface-damage) - not certified production "
+    "inspection data."
+)
+
+
+class CVDetection(BaseModel):
+    defect_type: str
+    confidence: float
+    bbox: list[float]
+
+
+class ImageQueryResponse(QueryResponse):
+    """
+    Extends QueryResponse with CV-specific fields. The retrieval/refusal
+    fields it inherits (found, message, dossier, history, generated_answer)
+    behave identically to a typed-question /query call - the CV flag is
+    only ever used to produce `cv_query_text`, which is fed into the same
+    unmodified retrieval pipeline as any other query_text.
+    """
+
+    cv_detections: list[CVDetection]
+    cv_query_text: str
+    triage_disclaimer: str = CV_TRIAGE_DISCLAIMER
+    dataset_disclaimer: str = CV_DATASET_DISCLAIMER

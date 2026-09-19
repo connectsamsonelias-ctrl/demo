@@ -31,6 +31,12 @@ services:
       # low-power CPU-only hardware (see app/llm.py). Raise further if
       # you still see timeouts on slower machines.
       - OLLAMA_TIMEOUT_SECONDS=${OLLAMA_TIMEOUT_SECONDS:-300}
+      # CV defect-detection service URL - same fail-soft philosophy as
+      # Ollama above, but the /query/image endpoint that uses this
+      # returns a clear 503 if unreachable rather than silently falling
+      # back, since there's no meaningful text-query substitute for "the
+      # photo was never analyzed."
+      - CV_SERVICE_URL=http://cv:8001
     volumes:
       # Standalone ChromaDB persistent storage: its own named volume,
       # independent of the app container's filesystem, so the vector
@@ -69,6 +75,27 @@ services:
     # be an opt-in, not something that silently starts by default.
     profiles:
       - llm
+
+  cv:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.cv
+    image: aviation_rag_cv:latest
+    container_name: aviation_rag_cv
+    restart: unless-stopped
+    networks:
+      - aviation_rag_net
+    # No published port to the host - only the api container needs to
+    # reach it, at http://cv:8001. Optional service, same profile
+    # pattern as ollama: only starts with `docker compose --profile cv
+    # up --build` (or `--profile llm --profile cv` for both). Plain
+    # `docker compose up` is unaffected.
+    #
+    # Note: as of this writing, no fine-tuned model has been baked into
+    # this image yet (see scripts/train_defect_model.py) - the container
+    # builds and starts, but /detect returns 503 until one is provided.
+    profiles:
+      - cv
 
 networks:
   aviation_rag_net:

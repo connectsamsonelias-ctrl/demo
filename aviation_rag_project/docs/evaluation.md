@@ -81,3 +81,23 @@ are marked "not measured" honestly rather than backfilled with guesses.
 Going forward, add a new row for every meaningful change, per the
 project's documentation policy, and prefer running the *entire* query set
 each time over spot-checking only what changed.
+
+## CV defect-detection accuracy — not yet applicable
+
+The CV first-pass defect check (`cv_service/`, `/query/image` — see
+README Stage G) has **no accuracy metrics to log yet**, because no
+fine-tuned model exists: `models/defect_yolo.pt` has never been produced.
+What was verified (2026-09-19) was the *pipeline wiring* — a stock
+pretrained YOLOv8n checkpoint correctly flowed through detection →
+`query_text` formatting → the existing retrieval/refusal path — using
+`tests/test_cv_inference.py` and `tests/test_query_image.py` (mocked)
+plus a live manual run against real photos. That is a wiring check, not
+a defect-detection accuracy measurement; the model has never seen an
+aircraft.
+
+Once `scripts/train_defect_model.py` produces a real fine-tuned
+checkpoint, its `docs/cv-training-report.json` output (precision, recall,
+mAP50, mAP50-95, per-class breakdown) should be logged here in a new
+results table, structured the same way as the retrieval table above —
+one row per training run, never overwritten, so accuracy trend over
+successive fine-tuning attempts stays visible.

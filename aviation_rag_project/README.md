@@ -18,16 +18,25 @@ aviation_rag_project/
     llm.py                <- optional local LLM call (off by default, see Stage F)
     templates/
       index.html          <- the browser chat page a person actually uses
+  cv_service/
+    inference.py            <- YOLO defect detection wrapper (see Stage G)
+    main.py                   <- standalone microservice exposing POST /detect
   scripts/
     parse_ata_chapters.py   <- reads a PDF, finds "ATA 32-21-00" style headers
     ingest_parsed_chunks.py  <- loads those parsed chunks into the database
+    prepare_cv_dataset.py     <- downloads + merges the two Roboflow defect datasets
+    train_defect_model.py      <- fine-tunes YOLO on the merged dataset
+    demo_cv_pipeline.py          <- runs sample images through the live pipeline (for the pitch)
   docker/
     Dockerfile         <- recipe to build the app into a container image
     Dockerfile.ollama  <- recipe for the optional local-LLM container
+    Dockerfile.cv        <- recipe for the optional CV defect-detection container
     docker-compose.yml  <- recipe to run the whole thing with one command
   data/
     manuals/            <- put your source PDFs/text here (read-only in Docker)
     snag_history.json    <- mock per-aircraft fault history (swap for real Maximo data later)
+  models/
+    (defect_yolo.pt goes here, once trained - see Stage G; not committed yet)
   tests/                <- automated checks that prove the code works
   docs/
     architecture.md         <- how it actually works, and current maturity
@@ -481,6 +490,94 @@ answer vs. a ~2 minute wait) is worth it for actual technicians doing
 real maintenance work is a judgment call, not a technical one - the raw
 retrieval path (Stage E, `LLM_ENABLED=false`) stays instant and available
 either way, so this is opt-in, not a replacement.
+
+---
+
+## Stage G - CV first-pass defect check (photo in, retrieved guidance out)
+
+A technician photographs a component; a computer-vision model does a
+first-pass check for common visual defects (crack, dent, scratch, paint
+peel-off, missing fastener head, corrosion) and feeds that flag into the
+**exact same, unmodified** retrieval and refusal pipeline as a typed
+question - the CV output is just an alternative way to produce
+`query_text`, nothing about `app/rag_engine.py` changed to support it.
+
+**This is a triage aid, not a certified inspection decision.** Every
+response carries a `triage_disclaimer` field
+(`TRIAGE AID ONLY - NOT A CERTIFIED INSPECTION DECISION...`) and a
+`dataset_disclaimer` noting the model is fine-tuned on public research
+data, not certified production inspection data - both are meant to be
+shown in any UI or demo, not left buried in JSON.
+
+### Architecture
+
+- `cv_service/` - a separate FastAPI microservice (its own container,
+  `docker/Dockerfile.cv`), exposing an internal-only `POST /detect`.
+  Kept out of the main `api` image so the large `torch`/`ultralytics`
+  dependency stays fully opt-in - same pattern as the optional `ollama`
+  service.
+- `app/main.py`'s new `POST /query/image` accepts a photo plus
+  **technician-selected** tail number/aircraft type/ATA chapter, calls
+  the CV service, and feeds the resulting `"<defect> detected... "` text
+  into the same `_run_retrieval()` helper `/query` uses.
+- **The technician still picks the ATA chapter manually.** A defect
+  label alone ("crack") doesn't imply which manual chapter covers it -
+  that mapping doesn't exist and wasn't built; this was a deliberate
+  scope decision, not an oversight (see `docs/architecture.md`).
+- A new synthetic manual chapter, ATA 53-10-00 (Fuselage - Skin Panel
+  Surface Damage Assessment), was added specifically so these 6 defect
+  types have something real to retrieve against - see
+  `scripts/generate_synthetic_manual.py`.
+
+### Status: wiring works, model is not fine-tuned yet
+
+Everything above is built and tested (34 automated tests total, `pytest
+tests/ -v`), verified end-to-end in this environment with a **stock
+pretrained YOLOv8n checkpoint** - the full pipeline (photo -> detection ->
+retrieval -> disclaimers) genuinely works, but that checkpoint recognizes
+generic COCO objects (buses, people), not aircraft skin defects. Real
+fine-tuning on the two Roboflow datasets is the remaining step:
+
+1. **`scripts/prepare_cv_dataset.py`** - downloads and merges both
+   datasets, normalizing class labels to the canonical 6. **Must run on a
+   machine that can reach Roboflow** - this project's dev sandbox is
+   directly confirmed blocked from `universe.roboflow.com` (same class of
+   restriction as Docker Hub earlier in this project), so this step has
+   not actually been executed anywhere yet. Needs a free Roboflow API key.
+2. **`scripts/train_defect_model.py`** - fine-tunes YOLOv8n/YOLO11n on the
+   merged dataset, reports real precision/recall/mAP (not just "it ran"),
+   and writes `docs/cv-training-report.json`. **Run wherever you have real
+   GPU compute** - not this dev sandbox (no GPU) and not the reference
+   Windows laptops (already known from LLM testing to struggle with much
+   smaller CPU-only inference workloads; training would be worse).
+3. Copy the resulting `best.pt` to `models/defect_yolo.pt` in this repo,
+   then `docker build` / `docker compose --profile cv up --build` bakes
+   it into the image - same air-gap principle as the embedding/LLM
+   models: the model is fetched once at build time, never at runtime.
+4. **`scripts/demo_cv_pipeline.py`** - sends a batch of sample images
+   through the live, running pipeline and prints a readable summary;
+   built for the FSID pitch demo specifically.
+
+### Running it
+
+```bash
+docker compose -f docker/docker-compose.yml --env-file .env --profile cv up --build
+```
+
+```bash
+curl -X POST http://localhost:8000/query/image \
+  -H "X-API-Key: <your key>" \
+  -F "wonum=WO-1" \
+  -F "tail_number=VT-IAF01" \
+  -F "ata_chapter=53" \
+  -F "aircraft_type=Airbus-A320" \
+  -F "image=@path/to/photo.jpg"
+```
+
+Until a fine-tuned model is baked in (step 3 above), `/detect` and
+`/query/image` return a `503` with a message naming exactly that reason -
+by design, not a bug: this project would rather fail loudly than serve
+detections from a model that's never seen an aircraft.
 
 ---
 

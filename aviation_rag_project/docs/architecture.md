@@ -1,6 +1,6 @@
 # Architecture
 
-_Last updated: 2026-09-19_
+_Last updated: 2026-09-19 (CV first-pass defect check added)_
 
 ## System overview
 
@@ -58,6 +58,32 @@ There is currently no hybrid BM25 + vector search and no reranking stage
 (both are named as future work in the project README) - retrieval today
 is pure dense vector search inside a hard metadata partition.
 
+### Alternative entry point: CV-derived queries
+
+`POST /query/image` (added alongside the CV first-pass defect check, see
+below) produces `query_text` a different way - a photo instead of typed
+words - but feeds it into this exact same pipeline from the `search`
+stage onward. `cv_service/inference.py` runs a YOLO model on the uploaded
+image and formats the top detection as
+`"<defect_type> detected by first-pass visual screening, confidence
+<n>. What are the allowable limits and repair procedure?"`, then
+`app/main.py`'s shared `_run_retrieval()` helper treats that exactly like
+a typed question - the retrieval, refusal, and generation logic have no
+awareness of, or special case for, where `query_text` came from.
+
+**The CV model does not, and cannot, choose the ATA chapter.** A defect
+label ("crack", "corrosion") doesn't imply which manual chapter covers
+it - that mapping doesn't exist in this system, and building it (e.g. a
+defect-type → ATA-chapter lookup) was a deliberate scope decision left
+out for now, not an oversight. The technician still supplies
+`tail_number`/`aircraft_type`/`ata_chapter` manually alongside the photo,
+same as with a typed query. See `README.md`'s Stage G for the full
+feature writeup, and `docs/failure-modes.md` for a known consequence of
+this: retrieval will happily match a semantically-unrelated CV label
+against whatever single chunk exists for the chosen ATA chapter (since
+`n_results=1` has no similarity threshold) - not a bug introduced by CV,
+but a pre-existing behavior this new entry point exercises more visibly.
+
 ## Refusal logic
 
 This is the core safety property of the system, and it is enforced in
@@ -98,12 +124,19 @@ never says similar-looking words on its own when it souldn't.
 
 ## Deployment
 
-Docker Compose, two services:
+Docker Compose, three services:
 
 - `api` - the FastAPI app. Always runs.
 - `ollama` - local LLM server (Qwen2.5 1.5B baked in at build time).
   Behind a Compose profile (`llm`) - only starts if explicitly requested
   (`docker compose --profile llm up`) and `LLM_ENABLED=true` is set.
+- `cv` - the CV defect-detection microservice (`cv_service/`, built from
+  `docker/Dockerfile.cv`). Behind a Compose profile (`cv`), same
+  opt-in pattern as `ollama`, for the same reason: keeps a large ML
+  dependency (`torch`/`ultralytics`) out of the always-on `api` image.
+  As of this writing, no fine-tuned model has been baked into this image
+  - see "Current stage" below - so it builds and starts, but `/detect`
+  returns a `503` naming that reason.
 
 **Why air-gapped, and what that actually means here:** the target
 deployment context is a sovereign/defense network where routing to any
@@ -160,13 +193,28 @@ Stated plainly, without inflating maturity:
   `docs/failure-modes.md`) and is off by default for that reason, among
   others (also: ~2 minute latency per answer on CPU-only hardware with no
   GPU).
+- **The CV defect model is not fine-tuned yet - `models/defect_yolo.pt`
+  does not exist.** The full pipeline (photo → detection → retrieval →
+  disclaimers) was verified end-to-end using a stock pretrained YOLOv8n
+  checkpoint, which correctly proves the wiring but recognizes generic
+  COCO objects (buses, people), not aircraft skin defects - it has never
+  produced a real defect classification. Fine-tuning requires (1) a
+  machine that can reach `universe.roboflow.com` (this project's dev
+  sandbox is directly confirmed blocked from it) and (2) real GPU compute
+  (not tested on the reference Windows laptops, which already struggle
+  with far smaller CPU-only LLM inference). See README Stage G for the
+  full pipeline.
 
 What *is* solid: the retrieval + refusal path itself, the ATA-chapter
-parsing regex, and the LLM fallback behavior - all covered by 19 passing
-automated unit tests as of this writing (`tests/test_parse_ata_chapters.py`:
-5, `tests/test_watch_and_ingest.py`: 7, `tests/test_llm.py`: 7). These are
-unit tests with mocked dependencies (mocked HTTP for the LLM, temp
-directories for file operations) - not integration tests against a real
-Ollama server or a real multi-manual ChromaDB index, and not what
+parsing regex, the LLM fallback behavior, and the CV→retrieval wiring
+(including its failure modes: CV service unreachable, model not yet
+baked in) - all covered by 34 passing automated unit tests as of this
+writing (`tests/test_parse_ata_chapters.py`: 5, `tests/test_watch_and_ingest.py`:
+7, `tests/test_llm.py`: 7, `tests/test_cv_inference.py`: 4,
+`tests/test_query_image.py`: 5, `tests/test_prepare_cv_dataset.py`: 6).
+These are unit tests with mocked dependencies (mocked HTTP for the LLM
+and CV service, a mocked YOLO model, temp directories for file
+operations) - not integration tests against a real Ollama server, a real
+fine-tuned CV model, or a real multi-manual ChromaDB index, and not what
 `docs/evaluation.md` tracks (retrieval/refusal accuracy against real
 content).
