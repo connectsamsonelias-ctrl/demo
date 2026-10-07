@@ -179,7 +179,11 @@ async def query_image(
         response = httpx.post(
             f"{CV_SERVICE_URL}/detect",
             files={"image": (image.filename, image_bytes, image.content_type)},
-            timeout=30.0,
+            # 90s, not 30s: CPU-only inference under real system load (other
+            # containers, a browser, this dev session all competing for the
+            # same weak CPU) can take meaningfully longer than a clean
+            # benchmark run - same lesson as OLLAMA_TIMEOUT_SECONDS.
+            timeout=90.0,
         )
         response.raise_for_status()
     except httpx.HTTPStatusError as e:
