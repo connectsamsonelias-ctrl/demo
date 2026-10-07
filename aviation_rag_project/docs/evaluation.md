@@ -8,12 +8,12 @@ since Maximo is the EMMS framework/implementation in use here, not a
 separate EMMS system (see `docs/architecture.md`, "Current stage"). Today
 it's still `data/snag_history.json`, a mock file, unaffected by this.
 
-**Model note:** the generation-latency numbers below (2026-08-28 row,
-and the "~94–120s" stat further down) were measured on Qwen2.5 1.5B,
-which is no longer the default model (swapped to Gemma 2 2B on
-2026-10-07 - see `docs/failure-modes.md`). They have not been
-re-measured on the new default yet; treat them as historical, not
-current, until a new row is added.
+**Model note:** the 2026-08-28 row's generation-latency number
+(~94-120s) was measured on Qwen2.5 1.5B, which is no longer the default
+model (swapped to Gemma 2 2B on 2026-10-07 - see
+`docs/failure-modes.md`). A first real measurement on the new default
+exists now (2026-10-07 row, 190s, single run) - treat it as an initial
+data point, not yet a reliable average (one run, one query).
 
 This tracks retrieval and refusal accuracy over time. **There is currently
 no automated evaluation harness** — the numbers below come from manual
@@ -85,6 +85,7 @@ number `VT-IAF01`, aircraft type `Airbus-A320`, unless noted otherwise.
 |------|-------------------|----------------------|--------------------|---------------------------------|---------------------------------|---------------------|-----------------------|-------|
 | 2026-08-26 | `045dc53` | 4/4 (IS-1..4, manual spot-check) | 4/4 | 0/2 (OOS-1, OOS-2 not yet both tested this run) | 0/4 observed | < 1s (not precisely timed) | N/A (LLM not yet built) | Initial manual verification during synthetic-manual testing; not a scripted run. |
 | 2026-08-28 | `91e5376` | Not re-measured | Not re-measured | Not re-measured | **1 observed (EDGE-1)**: LLM returned "DATA NOT FOUND IN APPROVED MANUAL." despite the dossier containing torque, inspection, and safety data | Not measured | ~94–120s (2 runs, Qwen2.5 1.5B, CPU-only dual-core laptop, no GPU) | First live LLM generation test. See `docs/failure-modes.md` for full detail on the EDGE-1 failure. |
+| 2026-10-07 | `24b79ba` | 1/1 (IS-1 re-checked) | Not re-measured | Not re-measured | *(EDGE-1 re-test pending — see next row once run)* | Not re-measured | **190s** (1 run, Gemma 2 2B, same CPU-only dual-core laptop, no GPU) | First live generation test on the post-swap default model (Gemma 2 2B, replacing Qwen2.5 1.5B - see `docs/failure-modes.md`, 2026-10-07 entry). IS-1 answer correct ("120 Nm +/- 5 Nm, applied in two stages"), generated-answer label displayed correctly. Slower than Qwen's ~94-120s, consistent with Gemma 2 2B being a larger model on identical hardware - not yet a large enough sample to call this a reliable average, just the first real data point. |
 | _(next run)_ | | | | | | | | Run the full query set above and fill in a new row — including for changes that don't touch retrieval directly (e.g. a model swap), since latency and refusal behavior can shift with them. |
 
 **Note on the two logged rows above:** these are reconstructed from the
