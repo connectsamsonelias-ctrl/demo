@@ -159,6 +159,54 @@ know they no longer describe the model actually running by default.
 
 ---
 
+## 2026-10-07 — EDGE-1 re-tested on Gemma 2 2B: partial improvement, new failure shape
+
+**What query broke it:** Same EDGE-1 compound question as the 2026-08-28
+entry above, same parameters (tail `VT-IAF01`, ATA `32`), run after
+the model swap logged in the entry above this one.
+
+**What happened:** Not a clean pass, and not the same failure as before
+either - worth being precise rather than rounding to "fixed" or "still
+broken." Gemma correctly synthesized 3 of the 4 asked-for items from the
+dossier - torque spec, inspection interval, and the safety warning, all
+accurate and well-formed. It then appended `DATA NOT FOUND IN APPROVED
+MANUAL.` immediately after item 3, apparently in place of actually
+answering item 4 (the aircraft's snag history) - despite that history
+being present in the dossier and rendered correctly in the UI's separate
+Snag History panel in the same response. So: real synthesis improvement
+over the 2026-08-28 Qwen result (which answered zero of the four parts),
+but a new, more specific failure - an erroneous refusal fragment
+attached to one part of an otherwise-correct answer, rather than a
+refusal of the whole question.
+
+**Why (working theory, not confirmed):** Possibly the model treated the
+snag-history section of the dossier as a separate context block it
+didn't fully attend to while answering the other three items, and
+defaulted to the system prompt's refusal instruction for that one part
+specifically rather than for the whole response. Not confirmed via
+further testing (e.g. asking about snag history alone, isolated from the
+other three sub-questions, to see if that one part fails in isolation
+too).
+
+**What was changed to fix it:** Not fixed - this is a newly observed
+behavior from today's model swap, logged for traceability, not yet
+investigated further given same-day time constraints.
+
+**How the fix was verified:** N/A - not yet fixed. Re-testing EDGE-1
+again, and specifically isolating the snag-history sub-question, are the
+natural next steps.
+
+**Severity assessment:** Mixed. The three correctly-answered parts are a
+genuine improvement in usefulness over the prior Qwen result. The
+erroneous refusal fragment on the fourth part is still a false negative
+(withholding real, present data) - the safer failure direction, same as
+the original EDGE-1 finding - but its partial, inline placement (mid-answer,
+not as a whole-response refusal) is a different and arguably more
+confusing shape of failure for a technician reading the output: it looks
+like the answer stopped partway through rather than refused outright.
+
+---
+
 ## Template for future entries
 
 ```markdown
