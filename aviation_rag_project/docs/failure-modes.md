@@ -188,13 +188,50 @@ further testing (e.g. asking about snag history alone, isolated from the
 other three sub-questions, to see if that one part fails in isolation
 too).
 
-**What was changed to fix it:** Not fixed - this is a newly observed
-behavior from today's model swap, logged for traceability, not yet
-investigated further given same-day time constraints.
+**What was changed to fix it, and what actually happened across three
+live attempts (same day, same hardware, same question):**
 
-**How the fix was verified:** N/A - not yet fixed. Re-testing EDGE-1
-again, and specifically isolating the snag-history sub-question, are the
-natural next steps.
+1. **Attempt 1 (initial finding, above):** 3/4 correct + erroneous
+   fragment, as described.
+2. **Attempt 2:** Removed a duplicate, conflicting refusal instruction
+   that `app/rag_engine.py` baked directly into the dossier text (a
+   "SYSTEM COMPLIANCE BOUNDARY" block, differently worded from
+   `app/llm.py`'s `SYSTEM_PROMPT`, telling the model to "fail with an
+   error code" per-parameter - redundant with the code-level guardrail
+   and a plausible source of the per-item refusal behavior). Also
+   rewrote `SYSTEM_PROMPT` with an explicit, multi-sentence instruction
+   for handling compound questions. **Result: regression, not
+   improvement** - a full blanket refusal, including for the three
+   items the model had previously answered correctly. Live-tested on
+   the actual laptop, not assumed.
+3. **Attempt 3:** Kept the dossier cleanup from attempt 2 (architecturally
+   correct regardless, and didn't cause the regression), but replaced
+   the long explanatory `SYSTEM_PROMPT` rewrite with a single short
+   added sentence instead. **Result: back to the original 3/4-correct
+   pattern** - same partial success, same erroneous fragment on the
+   snag-history part. Not worse than the original finding, but not
+   better either.
+
+**Decision: stopped after three attempts**, given same-day time
+constraints ahead of a scheduled pitch. The dossier cleanup (removing
+the duplicate instruction) is kept, since it's a real architectural
+improvement with no observed downside across all three attempts - but
+the underlying EDGE-1 behavior itself is **not resolved**. Documented
+honestly as a known, unresolved limitation of the current default model
+on this class of compound question, not claimed fixed.
+
+**Working theory on why attempt 2 regressed (not confirmed):** small
+(2B-class) models plausibly follow shorter, simpler system prompts more
+reliably than longer, more explicit ones - the added length and extra
+clauses in attempt 2's prompt likely cost more in instruction-following
+reliability than the clarification gained. Consistent with, but not
+proof of, general small-model behavior; not isolated via further
+ablation given time constraints.
+
+**How the fix was verified:** Partially - attempts 2 and 3 were both
+live-tested against the real EDGE-1 question on the actual deployment
+hardware, not assumed from code review. Neither constitutes a full fix;
+see above.
 
 **Severity assessment:** Mixed. The three correctly-answered parts are a
 genuine improvement in usefulness over the prior Qwen result. The
