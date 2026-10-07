@@ -77,13 +77,23 @@ def chat_ui(request: Request) -> HTMLResponse:
 
 
 def _run_retrieval(
-    tail_number: str, query_text: str, ata_chapter: str, aircraft_type: str
+    tail_number: str,
+    query_text: str,
+    ata_chapter: str,
+    aircraft_type: str,
+    generate_requested: bool = False,
 ) -> dict:
     """
     Shared retrieval + optional-generation logic, used identically by
     both /query (typed text) and /query/image (CV-derived text) - neither
     the retrieval/refusal engine nor the LLM call is aware of, or changed
     by, which caller produced query_text.
+
+    `generate_requested` is the caller's per-request choice to wait for a
+    natural-language answer at all. Retrieval itself (the lines above the
+    `if` below) always runs and is near-instant regardless of this flag -
+    it's only the optional LLM step that this flag gates, so a caller that
+    wants the fast path never pays generation's latency.
     """
     assert rag_system is not None, "RAG engine not initialized"
 
@@ -102,6 +112,7 @@ def _run_retrieval(
         generated_answer = llm.generate_answer(
             dossier_text=result["dossier"],
             question=query_text,
+            requested=generate_requested,
         )
     result["generated_answer"] = generated_answer
     return result
@@ -119,6 +130,7 @@ def query(payload: MaximoWorkOrderQuery) -> QueryResponse | JSONResponse:
         query_text=payload.query_text,
         ata_chapter=payload.ata_chapter,
         aircraft_type=payload.aircraft_type,
+        generate_requested=payload.generate_natural_language,
     )
 
     return QueryResponse(
@@ -142,6 +154,11 @@ async def query_image(
     tail_number: str = Form(...),
     ata_chapter: str = Form(..., description="Technician-selected ATA chapter for the component in the photo"),
     aircraft_type: str = Form(default="Airbus-A320"),
+    generate_natural_language: bool = Form(
+        default=False,
+        description="Same per-request choice as /query - wait for a natural-language "
+        "answer (slower) or skip straight to the retrieved dossier (near-instant).",
+    ),
     image: UploadFile = File(...),
 ) -> ImageQueryResponse:
     """
@@ -188,6 +205,7 @@ async def query_image(
         query_text=cv_query_text,
         ata_chapter=ata_chapter,
         aircraft_type=aircraft_type,
+        generate_requested=generate_natural_language,
     )
 
     return ImageQueryResponse(

@@ -18,6 +18,15 @@ class MaximoWorkOrderQuery(BaseModel):
     aircraft_type: str = Field(default="Airbus-A320", description="Aircraft model/fleet")
     ata_chapter: str = Field(..., description="ATA chapter to constrain the search, e.g. '32'")
     query_text: str = Field(..., description="Fault description / technician question")
+    generate_natural_language: bool = Field(
+        default=False,
+        description="If true and LLM_ENABLED=true on the server, wait for a local-LLM "
+        "natural-language answer (can take minutes on CPU-only hardware). If false "
+        "(the default), skip generation entirely and return the retrieved dossier "
+        "text immediately - retrieval is near-instant regardless of hardware. This "
+        "lets a caller choose the fast path per-request rather than the server's "
+        "LLM_ENABLED setting dictating every request's latency.",
+    )
 
     class Config:
         json_schema_extra = {

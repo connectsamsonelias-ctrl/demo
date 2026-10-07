@@ -84,6 +84,15 @@
     color: var(--text);
     font-size: 13px;
   }
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 14px 0 0;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .toggle-row input { width: auto; }
   .filters .hint {
     font-size: 11px;
     color: var(--muted);
@@ -293,6 +302,19 @@
       ATA chapter &mdash; the system only searches within that boundary,
       and will say so plainly if nothing matches rather than guessing.
     </div>
+
+    <label class="toggle-row" for="generate-toggle">
+      <input id="generate-toggle" type="checkbox">
+      <span>Generate AI-polished answer</span>
+    </label>
+    <div class="hint">
+      Off by default: the exact manual text and snag history return in
+      under a second either way. Turning this on also asks the local LLM
+      to turn that text into a written sentence &mdash; which can take
+      several minutes on CPU-only hardware with no GPU. The underlying
+      data is identical either way; this only changes whether you wait
+      for a rewritten version of it.
+    </div>
   </div>
 
   <div class="chat-area">
@@ -465,7 +487,9 @@
     addUserMessage(question);
     questionEl.value = '';
     askBtn.disabled = true;
-    askBtn.textContent = 'Asking...';
+    askBtn.textContent = document.getElementById('generate-toggle').checked
+      ? 'Generating (slower)...'
+      : 'Retrieving...';
 
     try {
       const res = await fetch('/query', {
@@ -480,6 +504,7 @@
           aircraft_type: aircraftType,
           ata_chapter: ataChapter,
           query_text: question,
+          generate_natural_language: document.getElementById('generate-toggle').checked,
         }),
       });
 
@@ -547,6 +572,7 @@
       formData.append('tail_number', tailNumber);
       formData.append('aircraft_type', aircraftType);
       formData.append('ata_chapter', ataChapter);
+      formData.append('generate_natural_language', document.getElementById('generate-toggle').checked);
       formData.append('image', file);
 
       const res = await fetch('/query/image', {

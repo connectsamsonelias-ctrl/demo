@@ -46,17 +46,31 @@ SYSTEM_PROMPT = (
 )
 
 
-def generate_answer(dossier_text: str, question: str) -> str | None:
+def generate_answer(
+    dossier_text: str, question: str, *, requested: bool = True
+) -> str | None:
     """
     Sends the already-retrieved dossier text and the technician's question
     to the local Ollama server for a natural-language answer.
 
-    Returns None (never raises) if generation is disabled, the server is
-    unreachable, or anything goes wrong - callers should treat None as
-    "fall back to showing the raw dossier text", not as an error to
-    surface to the user. This keeps LLM generation a pure enhancement:
-    the underlying retrieval + guardrail behaviour is unaffected either way.
+    `requested` is the caller's per-request choice (e.g. a UI checkbox) to
+    wait for generation at all - it can only turn generation OFF for this
+    one call, never force it on if the server's LLM_ENABLED is false (there
+    may be no Ollama server to call in that case). This is what lets a
+    technician choose the near-instant raw-retrieval path on a per-question
+    basis, instead of the server's LLM_ENABLED setting dictating every
+    request's latency.
+
+    Returns None (never raises) if generation wasn't requested, is disabled
+    server-wide, the server is unreachable, or anything goes wrong - callers
+    should treat None as "fall back to showing the raw dossier text", not as
+    an error to surface to the user. This keeps LLM generation a pure
+    enhancement: the underlying retrieval + guardrail behaviour is
+    unaffected either way.
     """
+    if not requested:
+        return None
+
     llm_enabled = os.environ.get("LLM_ENABLED", "false").lower() == "true"
     if not llm_enabled:
         return None

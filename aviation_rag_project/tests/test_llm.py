@@ -18,6 +18,34 @@ def test_disabled_by_default_returns_none_without_any_http_call(monkeypatch):
         assert route.call_count == 0
 
 
+def test_not_requested_skips_generation_even_if_server_has_it_enabled(monkeypatch):
+    # The per-request `requested=False` choice (e.g. the UI's unchecked
+    # "Generate AI-polished answer" toggle) must short-circuit before any
+    # HTTP call, even when LLM_ENABLED=true server-wide - this is what
+    # lets a caller take the near-instant retrieval-only path regardless
+    # of the server's own setting.
+    monkeypatch.setenv("LLM_ENABLED", "true")
+    with respx.mock(assert_all_called=False) as router:
+        route = router.post("http://ollama:11434/api/chat")
+        result = llm.generate_answer("some dossier text", "a question", requested=False)
+        assert result is None
+        assert route.call_count == 0
+
+
+@respx.mock
+def test_requested_true_still_requires_server_enabled(monkeypatch):
+    # requested=True can only turn generation ON if the server itself has
+    # LLM_ENABLED=true - it can't force a call when the server has
+    # generation disabled entirely (there may be no Ollama to call).
+    monkeypatch.setenv("LLM_ENABLED", "false")
+    route = respx.post("http://ollama:11434/api/chat").mock(
+        return_value=httpx.Response(200, json={"message": {"content": "ok"}})
+    )
+    result = llm.generate_answer("some dossier text", "a question", requested=True)
+    assert result is None
+    assert route.call_count == 0
+
+
 def test_explicitly_disabled_returns_none(monkeypatch):
     monkeypatch.setenv("LLM_ENABLED", "false")
     result = llm.generate_answer("some dossier text", "a question")

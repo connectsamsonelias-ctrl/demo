@@ -475,6 +475,21 @@ generated answer is a convenience layer, not the system of record.
   "AI-generated answer (local model)"), with the exact retrieved manual
   text available in a collapsed "Show retrieved source text" section for
   verification.
+- **Retrieval and generation are two separate steps, and the UI exposes
+  that as a real per-question choice, not just an internal detail.** A
+  "Generate AI-polished answer" checkbox (off by default) controls
+  whether a given question waits for the local LLM at all -
+  `MaximoWorkOrderQuery.generate_natural_language` (default `False`) and
+  the matching `/query/image` form field carry this choice to the API.
+  With it off, `_run_retrieval()` in `app/main.py` returns the retrieved
+  dossier immediately - near-instant regardless of hardware - and never
+  calls `llm.generate_answer()` at all. With it on, the request waits for
+  generation (see the latency numbers in `docs/evaluation.md`). This
+  exists specifically because, before it was added, the browser UI always
+  waited for the full generation latency on every question whenever
+  `LLM_ENABLED=true` server-wide, with no way for a technician to choose
+  the fast path per-question - a real UX gap, not just a wording issue,
+  caught and fixed same-day (see `docs/failure-modes.md`).
 
 ### Turning it on
 

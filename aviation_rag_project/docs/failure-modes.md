@@ -244,6 +244,55 @@ like the answer stopped partway through rather than refused outright.
 
 ---
 
+## 2026-10-07 — UI always waited for generation latency, even when retrieval alone was instant
+
+**What broke it:** Not a query, a UX/architecture gap caught in conversation
+ahead of a scheduled pitch, not in testing: the browser chat UI's `/query`
+call was fully synchronous. Whenever `LLM_ENABLED=true` server-wide, every
+question waited for the full generation latency (minutes, on the
+CPU-only reference hardware - see the EDGE-1/IS-1 latency entries above)
+before the browser received *any* response, including the retrieved
+manual text itself, even though retrieval alone completes in under a
+second. There was no way for a technician to choose the fast,
+retrieval-only path on a per-question basis - the server's `LLM_ENABLED`
+setting dictated every request's latency, not the person asking.
+
+**Why this matters:** The project's own documentation had repeatedly
+described retrieval and generation as "two separate steps" where
+generation is "a convenience layer, never the system of record" -
+accurate architecturally, but the UI didn't actually expose that
+separation as a usable choice. A technician in the field would have had
+no way to get the fast answer fast, if the server had generation turned
+on.
+
+**What was changed to fix it:** Added a real per-request choice.
+`MaximoWorkOrderQuery.generate_natural_language` (default `False`) and a
+matching `/query/image` form field now control whether a given request
+waits for generation at all - `app/llm.py`'s `generate_answer()` gained a
+`requested` keyword that can only turn generation OFF for one call, never
+force it on if the server itself has `LLM_ENABLED=false`. The chat UI
+gained a "Generate AI-polished answer" checkbox, off by default, so the
+near-instant retrieval-only path is now the default experience, with
+generation as an explicit, informed opt-in rather than something the
+server silently imposes on every question.
+
+**How the fix was verified:** 2 new automated tests
+(`tests/test_llm.py`) confirm `requested=False` skips the HTTP call
+entirely even when the server has `LLM_ENABLED=true`, and that
+`requested=True` still can't force a call when the server has it
+disabled. Full test suite (36 tests) passes. Not yet verified via a live
+UI click-through on the deployment laptop - that's the next step, not
+assumed from the code change alone.
+
+**Severity assessment:** This was a real UX/architecture gap, not a
+correctness bug - no wrong answers were ever produced because of it, but
+a technician had no way to avoid a multi-minute wait when the server had
+generation enabled, which would have undercut the project's own
+"retrieval is the fast critical path" claim in actual use. Caught and
+fixed same-day, before it reached a demo, not after.
+
+---
+
 ## Template for future entries
 
 ```markdown
