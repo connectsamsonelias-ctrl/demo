@@ -416,18 +416,39 @@ retrieved dossier into a properly generated, natural-language answer.
 setup, so it stays opt-in. When disabled (the default), behavior is
 unchanged from Stage E.
 
-**Model choice: Qwen2.5 1.5B, not BharatGen (yet).** BharatGen's Param-1
-was seriously considered (see the earlier conversation) since it fits
-this project's sovereignty framing better than Meta's Llama - but two
-things blocked it for now: its weights carry a **non-commercial license**
-whose terms for a defense/commercial deployment aren't confirmed, and it
-isn't distributed in Ollama's GGUF format. Qwen2.5 1.5B (Apache 2.0, not
-tied to Meta either) is small enough to be plausible on modest CPU-only
-hardware and ships with a working Ollama build today. **Swapping to
-BharatGen later is a one-line config change** (`OLLAMA_MODEL` +
-rebuilding `docker/Dockerfile.ollama` with a GGUF-converted BharatGen
-build) - `app/llm.py` has no model-specific logic in it, and the UI
-doesn't care which model produced the text it's displaying.
+**Model choice: Gemma 2 2B (Google), not Qwen2.5, not BharatGen (yet).**
+This project's default model has changed twice, for two different
+reasons, and it's worth being precise about both:
+
+- **Qwen2.5 1.5B was the original default**, chosen for being Apache 2.0
+  licensed and small enough for CPU-only hardware. It worked - see
+  `docs/evaluation.md` and `docs/failure-modes.md` for real measured
+  latency and a known reliability limitation found while testing it.
+- **It was swapped to Gemma 2 2B (Google) after a defense-context
+  review flagged Qwen's origin (Alibaba, China) as a concern worth
+  raising even though the system runs fully offline.** Air-gapped
+  operation means no data leaves the machine regardless of which model
+  is loaded - that was never the issue. The issue is that a defense
+  sponsor may not want to sign off on a system whose model weights
+  originate from that specific source, independent of how it's deployed.
+  Gemma 2 2B was picked over the other Western candidates considered
+  (Llama 3.2 3B, Phi-4 Mini 3.8B) specifically for being closest in size
+  to the previous default, to avoid also taking a latency hit on top of
+  the origin swap. See `docs/failure-modes.md` for the dated entry on
+  this change and the full tradeoff between the three alternatives.
+- **BharatGen's Param-1** was considered earlier still (see git history)
+  since it fits this project's sovereignty framing even better - but its
+  weights carry a non-commercial license whose terms for a defense
+  deployment aren't confirmed, and it isn't distributed in Ollama's GGUF
+  format. Still a candidate once both are resolved.
+
+**Swapping the model is, and has stayed, a one-line config change**
+(`OLLAMA_MODEL` + rebuilding `docker/Dockerfile.ollama`) - `app/llm.py`
+has no model-specific logic in it, and the UI doesn't care which model
+produced the text it's displaying. Say so explicitly in any pitch/demo
+deck: the model is swappable and should be finalized with the sponsor,
+since the refusal guardrail's safety guarantee doesn't depend on which
+model is behind it.
 
 **A known, unavoidable tradeoff:** the strict-refusal guardrail
 (`DATA NOT FOUND IN APPROVED MANUAL`) is still enforced entirely in code,
@@ -479,17 +500,22 @@ this needs internet, same one-time exception as the embedding model.
 After that, ask a question in the chat UI as before; the answer bubble
 should now read as a written sentence instead of the raw dossier block.
 
-**Measured, not estimated:** on the actual dev laptop this was tested on
-(dual-core AMD A4, no GPU, CPU-only inference), a single answer took
-about **2 minutes**. The first attempt on a freshly-started container
-timed out entirely at the original 120s limit - `app/llm.py`'s timeout is
-now 300s by default specifically because of that. This is real
-information about this class of hardware, not a guess: a small model
-still isn't fast without a GPU. Whether that tradeoff (a properly worded
-answer vs. a ~2 minute wait) is worth it for actual technicians doing
-real maintenance work is a judgment call, not a technical one - the raw
-retrieval path (Stage E, `LLM_ENABLED=false`) stays instant and available
-either way, so this is opt-in, not a replacement.
+**Measured, not estimated - but measured on the previous model.** On the
+actual dev laptop this was tested on (dual-core AMD A4, no GPU, CPU-only
+inference), Qwen2.5 1.5B took about **2 minutes** per answer. The first
+attempt on a freshly-started container timed out entirely at the
+original 120s limit - `app/llm.py`'s timeout is now 300s by default
+specifically because of that. **This has not yet been re-measured on
+Gemma 2 2B**, the current default (see model-choice note above) - it's a
+larger model, so expect this number to get worse, not better, until it's
+actually re-tested and logged in `docs/evaluation.md`. This is real
+information about this class of hardware either way, not a guess: a
+small model still isn't fast without a GPU. Whether that tradeoff (a
+properly worded answer vs. a multi-minute wait) is worth it for actual
+technicians doing real maintenance work is a judgment call, not a
+technical one - the raw retrieval path (Stage E, `LLM_ENABLED=false`)
+stays instant and available either way, so this is opt-in, not a
+replacement.
 
 ---
 
@@ -655,12 +681,13 @@ pytest tests/ -v
   Framework (MIF) call or a local SQLite mirror.
 - Hybrid BM25 + vector search and a cross-encoder reranker, per the
   playbook's Milestone 2.
-- **Upgrade the local LLM once running on better hardware.** Qwen2.5 1.5B
-  was chosen specifically because it's the largest model this project's
-  dev laptop (dual-core CPU, no GPU) could run at all - current guidance
-  is blunt that "anything above 4B on CPU is essentially a batch job, not
-  a chat." On hardware with a GPU (or just a stronger CPU), revisit with:
-  - **Gemma 3 2B** (Google) - smallest step up, reportedly the fastest
+- **Upgrade the local LLM once running on better hardware.** The current
+  default, Gemma 2 2B, was chosen (over the original Qwen2.5 1.5B
+  default) specifically to be the smallest step up in size that still
+  moved off a non-Western model - current guidance is blunt that
+  "anything above 4B on CPU is essentially a batch job, not a chat," so
+  going further than 2B isn't free on this hardware class. On hardware
+  with a GPU (or just a stronger CPU), revisit with:
   - **Llama 3.2 3B** (Meta) - often the best general-quality pick at this size
   - **Phi-4 Mini 3.8B** (Microsoft) - punches above its size on reasoning,
     which may specifically help with the compound-question refusal issue
@@ -668,6 +695,10 @@ pytest tests/ -v
     on a multi-part question even though the retrieved dossier contained
     everything needed - a false-negative, not a hallucination, but still
     a real reliability gap worth re-testing with a stronger model)
-  All are free, open-weight, and Ollama-compatible - swap via `OLLAMA_MODEL`
-  in `.env` and rebuild `docker/Dockerfile.ollama`, same as any other model
-  change (see Stage F).
+  Both are free, open-weight, Western-origin, and Ollama-compatible -
+  swap via `OLLAMA_MODEL` in `.env` and rebuild `docker/Dockerfile.ollama`,
+  same as any other model change (see Stage F).
+- **Re-measure latency and re-run the EDGE-1 compound-question test on
+  Gemma 2 2B.** The ~2 minute figure and the EDGE-1 failure in
+  `docs/failure-modes.md` were both observed on the now-replaced Qwen2.5
+  default - neither has been re-checked against the new default yet.

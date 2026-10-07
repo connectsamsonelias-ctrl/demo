@@ -13,6 +13,14 @@ dossier text, which is the same behaviour this project already had.
 Swapping the model (e.g. to a locally-hosted BharatGen build once its
 licensing is confirmed) is a config change (OLLAMA_MODEL), not a code
 change - this module has no model-specific logic in it.
+
+Default model is Gemma 2 2B (Google) - swapped from an earlier Qwen2.5
+1.5B default (Alibaba) specifically for country-of-origin reasons raised
+during a defense-context review: offline/air-gapped operation means no
+data leaves the machine either way, but a Western-origin model's weights
+avoid that conversation entirely for a defense sponsor. See
+docs/failure-modes.md and README Stage F for the full reasoning and the
+other candidates considered (Llama 3.2 3B, Phi-4 Mini 3.8B).
 """
 
 from __future__ import annotations
@@ -54,7 +62,7 @@ def generate_answer(dossier_text: str, question: str) -> str | None:
         return None
 
     ollama_base_url = os.environ.get("OLLAMA_BASE_URL", "http://ollama:11434")
-    ollama_model = os.environ.get("OLLAMA_MODEL", "qwen2.5:1.5b-instruct")
+    ollama_model = os.environ.get("OLLAMA_MODEL", "gemma2:2b")
     # 300s default, not the more typical 30-60s: measured on real
     # low-power CPU-only hardware (a dual-core laptop with no GPU), a
     # 1.5B model took ~2 minutes to answer even once "warm" - the first

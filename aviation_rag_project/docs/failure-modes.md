@@ -1,6 +1,6 @@
 # Failure Modes
 
-_Last updated: 2026-09-19_
+_Last updated: 2026-10-07_
 
 **Naming note:** the EDGE-1 entry below references "snag history" data -
 in this deployment's setup that's planned to eventually come from
@@ -112,6 +112,50 @@ conflicts, partial matches) do not yet apply to the CV path** and won't
 until a real fine-tuned model exists and is exercised against real
 defect photos. First real CV-specific entry should appear once that
 happens - don't backfill one before then.
+
+---
+
+## 2026-10-07 — Default LLM swapped from Qwen2.5 1.5B to Gemma 2 2B
+
+Not a failure entry either — logged because it's a meaningful change per
+this project's documentation policy, and because it invalidates a piece
+of previously-measured data below.
+
+**What changed and why:** an external review of this project (ahead of a
+defense-context pitch) flagged that the default model, Qwen2.5 1.5B, is
+Alibaba-origin (China). Air-gapped/offline operation already means no
+data leaves the deployment machine regardless of which model is loaded -
+that was never in question. The actual concern is narrower and still
+real: a defense sponsor may object to a specific model's country of
+origin independent of how the system is deployed, and that's a
+reasonable thing for a reviewer to raise. The default was changed to
+**Gemma 2 2B (Google)** - chosen over the other Western-origin
+candidates already named in this project's own "Next steps" list (Llama
+3.2 3B, Phi-4 Mini 3.8B) specifically for being closest in size to the
+previous default, to avoid stacking a latency regression on top of the
+origin swap. `app/llm.py`, `docker/Dockerfile.ollama`,
+`docker/docker-compose.yml`, and `.env.example` were all updated;
+`app/llm.py` has no model-specific logic, so no code logic changed.
+
+**What this invalidates, not yet re-verified:**
+- The **~94–120s / ~2 minute generation latency** figure in the
+  2026-08-28 entry above and in `docs/evaluation.md`'s results log was
+  measured on Qwen2.5 1.5B. Gemma 2 2B is a larger model - expect this
+  number to be equal or worse on the same CPU-only hardware, not better,
+  until it's actually re-measured.
+- The **EDGE-1 compound-question false-negative refusal** (2026-08-28
+  entry above) was also observed on Qwen2.5 1.5B specifically. Whether
+  Gemma 2 2B exhibits the same failure, a different one, or neither is
+  unknown - it has not been re-tested. Do not assume either outcome
+  until EDGE-1 is actually re-run against the new default.
+
+**Fix status:** N/A - this is a configuration/sourcing change, not a bug
+fix. The underlying refusal guardrail (code-level, model-independent) is
+unaffected either way - see `docs/architecture.md`.
+
+**Severity assessment:** N/A - not a failure. Logged for traceability:
+anyone reading the 2026-08-28 entry's latency/failure numbers needs to
+know they no longer describe the model actually running by default.
 
 ---
 

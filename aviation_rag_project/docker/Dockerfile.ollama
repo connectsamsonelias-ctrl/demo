@@ -2,16 +2,24 @@
 # running container never needs to download anything - same air-gap
 # principle as the embedding model bake-in in the main Dockerfile.
 #
-# Default model: qwen2.5:1.5b-instruct (Apache 2.0 license, ~1GB). Chosen
-# for being small enough to run on modest CPU-only hardware while still
-# giving reasonable answer quality. Swap OLLAMA_MODEL below (and the
-# matching env var in docker-compose.yml) to use a different model -
-# including a locally-hosted BharatGen build, once its GGUF conversion
-# and license terms are sorted out. No application code needs to change
-# for that swap - see app/llm.py.
+# Default model: gemma2:2b (Google, ~1.6GB). Swapped from an earlier
+# qwen2.5:1.5b-instruct default (Alibaba) for country-of-origin reasons
+# raised in a defense-context review - offline/air-gapped operation
+# already means no data leaves the machine either way, but a
+# Western-origin model avoids that conversation with a defense sponsor
+# entirely. Chosen over the other Western candidates considered
+# (Llama 3.2 3B, Phi-4 Mini 3.8B) specifically because it's closest in
+# size to the previous default, to keep CPU-only latency from getting
+# meaningfully worse - see docs/failure-modes.md for the full tradeoff
+# and docs/evaluation.md for latency numbers once re-measured on this
+# model. Swap OLLAMA_MODEL below (and the matching env var in
+# docker-compose.yml) to use a different model - including a
+# locally-hosted BharatGen build, once its GGUF conversion and license
+# terms are sorted out. No application code needs to change for that
+# swap - see app/llm.py.
 FROM ollama/ollama:latest
 
-ARG OLLAMA_MODEL=qwen2.5:1.5b-instruct
+ARG OLLAMA_MODEL=gemma2:2b
 
 # Start the server in the background just long enough to pull the model,
 # then let the RUN step end (the temporary server process exits with it -

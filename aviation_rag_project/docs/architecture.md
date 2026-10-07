@@ -1,6 +1,6 @@
 # Architecture
 
-_Last updated: 2026-09-19 (CV first-pass defect check added)_
+_Last updated: 2026-10-07 (default LLM swapped to Gemma 2 2B)_
 
 ## System overview
 
@@ -127,8 +127,10 @@ never says similar-looking words on its own when it souldn't.
 Docker Compose, three services:
 
 - `api` - the FastAPI app. Always runs.
-- `ollama` - local LLM server (Qwen2.5 1.5B baked in at build time).
-  Behind a Compose profile (`llm`) - only starts if explicitly requested
+- `ollama` - local LLM server (Gemma 2 2B baked in at build time as of
+  2026-10-07, swapped from Qwen2.5 1.5B for country-of-origin reasons -
+  see `docs/failure-modes.md` and README Stage F). Behind a Compose
+  profile (`llm`) - only starts if explicitly requested
   (`docker compose --profile llm up`) and `LLM_ENABLED=true` is set.
 - `cv` - the CV defect-detection microservice (`cv_service/`, built from
   `docker/Dockerfile.cv`). Behind a Compose profile (`cv`), same

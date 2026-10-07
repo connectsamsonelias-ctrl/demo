@@ -1,12 +1,19 @@
 # Evaluation
 
-_Last updated: 2026-09-19_
+_Last updated: 2026-10-07_
 
 **Naming note:** queries below reference "snag history" - in this
 deployment's setup that data is planned to eventually come from Maximo,
 since Maximo is the EMMS framework/implementation in use here, not a
 separate EMMS system (see `docs/architecture.md`, "Current stage"). Today
 it's still `data/snag_history.json`, a mock file, unaffected by this.
+
+**Model note:** the generation-latency numbers below (2026-08-28 row,
+and the "~94–120s" stat further down) were measured on Qwen2.5 1.5B,
+which is no longer the default model (swapped to Gemma 2 2B on
+2026-10-07 - see `docs/failure-modes.md`). They have not been
+re-measured on the new default yet; treat them as historical, not
+current, until a new row is added.
 
 This tracks retrieval and refusal accuracy over time. **There is currently
 no automated evaluation harness** — the numbers below come from manual
