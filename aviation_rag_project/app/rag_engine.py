@@ -118,14 +118,24 @@ class AdvancedAviationRAG:
 
         official_manual_text = documents[0][0]
 
+        # Deliberately data-only below this point - no embedded "if X isn't
+        # explicit, fail" instruction here. An earlier version included one
+        # (a "SYSTEM COMPLIANCE BOUNDARY" block), which duplicated - and
+        # used different wording from - app/llm.py's SYSTEM_PROMPT. Having
+        # two differently-worded refusal instructions, one baked into the
+        # data itself, was found to confuse the LLM on compound questions:
+        # it would correctly answer the parts it could, then apply a
+        # per-item "fail" to the one part it judged not explicit enough,
+        # rather than the intended whole-response refusal. The code-level
+        # guardrail above (the `found: False` branch) already fully covers
+        # "no match at all" before the LLM is ever called, so this
+        # instruction added duplicate, conflicting guidance with no
+        # offsetting benefit. See docs/failure-modes.md, 2026-10-07 EDGE-1
+        # re-test entry, for the observed failure this caused.
         dossier = (
             f"--- MILITARY READINESS DOSSIER: {tail_number} ---\n"
             f"[HISTORICAL SNAG LOGS]:\n{history_summary}\n\n"
-            f"[OFFICIAL AMM COMPLIANCE CONTEXT]:\n{official_manual_text}\n\n"
-            f"--- SYSTEM COMPLIANCE BOUNDARY ---\n"
-            f"Instruction: Formulate a maintenance response based strictly on combining "
-            f"history and manual guidelines. If the data above does not explicitly state "
-            f"the parameter, fail with an error code."
+            f"[OFFICIAL AMM COMPLIANCE CONTEXT]:\n{official_manual_text}"
         )
 
         return {
