@@ -223,6 +223,43 @@
     opacity: 0.5;
     cursor: default;
   }
+  .composer button.secondary {
+    background: transparent;
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 0 16px;
+  }
+
+  .cv-block {
+    margin-bottom: 10px;
+  }
+  .cv-block .cv-title {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--accent);
+    margin-bottom: 6px;
+  }
+  .cv-detections {
+    font-size: 13px;
+    margin-bottom: 8px;
+  }
+  .cv-detections .det-row {
+    padding: 2px 0;
+  }
+  .disclaimer-box {
+    border: 1px solid #d29922;
+    background: rgba(210, 153, 34, 0.1);
+    color: #e3b341;
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 11.5px;
+    line-height: 1.5;
+    margin-bottom: 6px;
+  }
+  .disclaimer-box:last-of-type {
+    margin-bottom: 10px;
+  }
 
   ::-webkit-scrollbar { width: 8px; }
   ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
@@ -272,6 +309,8 @@
 
     <div class="composer">
       <textarea id="question" placeholder="Type a maintenance question&hellip;" rows="1"></textarea>
+      <input id="photo-input" type="file" accept="image/*" style="display:none">
+      <button id="photo-btn" class="secondary" type="button">&#128247; Photo</button>
       <button id="ask-btn">Ask</button>
     </div>
   </div>
@@ -316,9 +355,48 @@
     messagesEl.scrollTop = messagesEl.scrollHeight;
   }
 
-  function addSystemMessage({ text, notFound, history, generatedAnswer, sourceText }) {
+  function addSystemMessage({ text, notFound, history, generatedAnswer, sourceText, cvInfo }) {
     const div = document.createElement('div');
     div.className = 'msg system' + (notFound ? ' not-found' : '');
+
+    if (cvInfo) {
+      // CV-derived query: show what the vision model actually saw and
+      // the disclaimers before anything else - these are safety-critical
+      // and must never be buried below the retrieval result.
+      const cvBlock = document.createElement('div');
+      cvBlock.className = 'cv-block';
+
+      const title = document.createElement('div');
+      title.className = 'cv-title';
+      title.textContent = 'CV First-Pass Screening';
+      cvBlock.appendChild(title);
+
+      const detBox = document.createElement('div');
+      detBox.className = 'cv-detections';
+      if (cvInfo.detections && cvInfo.detections.length > 0) {
+        cvInfo.detections.forEach(d => {
+          const row = document.createElement('div');
+          row.className = 'det-row';
+          row.textContent = `${d.defect_type} — confidence ${(d.confidence * 100).toFixed(1)}%`;
+          detBox.appendChild(row);
+        });
+      } else {
+        detBox.textContent = 'No visual detection above threshold.';
+      }
+      cvBlock.appendChild(detBox);
+
+      const triageBox = document.createElement('div');
+      triageBox.className = 'disclaimer-box';
+      triageBox.textContent = cvInfo.triageDisclaimer;
+      cvBlock.appendChild(triageBox);
+
+      const datasetBox = document.createElement('div');
+      datasetBox.className = 'disclaimer-box';
+      datasetBox.textContent = cvInfo.datasetDisclaimer;
+      cvBlock.appendChild(datasetBox);
+
+      div.appendChild(cvBlock);
+    }
 
     if (generatedAnswer) {
       // A local LLM produced this answer from the retrieved manual text -
@@ -428,6 +506,88 @@
     } finally {
       askBtn.disabled = false;
       askBtn.textContent = 'Ask';
+    }
+  }
+
+  const photoBtn = document.getElementById('photo-btn');
+  const photoInput = document.getElementById('photo-input');
+
+  photoBtn.addEventListener('click', () => photoInput.click());
+  photoInput.addEventListener('change', () => {
+    if (photoInput.files && photoInput.files[0]) {
+      askWithImage(photoInput.files[0]);
+    }
+    photoInput.value = '';
+  });
+
+  async function askWithImage(file) {
+    const tailNumber = document.getElementById('tail-number').value.trim();
+    const aircraftType = document.getElementById('aircraft-type').value;
+    const ataChapter = document.getElementById('ata-chapter').value.trim();
+
+    if (!tailNumber || !ataChapter) {
+      addSystemMessage({ text: 'Please fill in Tail Number and ATA Chapter before submitting a photo.', notFound: true });
+      return;
+    }
+
+    if (emptyStateEl.parentNode) emptyStateEl.remove();
+    const div = document.createElement('div');
+    div.className = 'msg user';
+    div.innerHTML = `<div class="bubble">&#128247; Photo submitted: ${file.name}</div>`;
+    messagesEl.appendChild(div);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+
+    photoBtn.disabled = true;
+    askBtn.disabled = true;
+    photoBtn.textContent = 'Analyzing photo...';
+
+    try {
+      const formData = new FormData();
+      formData.append('wonum', 'UI-' + (woCounter++));
+      formData.append('tail_number', tailNumber);
+      formData.append('aircraft_type', aircraftType);
+      formData.append('ata_chapter', ataChapter);
+      formData.append('image', file);
+
+      const res = await fetch('/query/image', {
+        method: 'POST',
+        headers: {
+          'X-API-Key': API_KEY,
+        },
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const errBody = await res.text();
+        addSystemMessage({ text: `CV request failed (${res.status}): ${errBody}`, notFound: true });
+        return;
+      }
+
+      const data = await res.json();
+      const cvInfo = {
+        detections: data.cv_detections,
+        triageDisclaimer: data.triage_disclaimer,
+        datasetDisclaimer: data.dataset_disclaimer,
+      };
+
+      if (data.found) {
+        addSystemMessage({
+          text: data.dossier,
+          notFound: false,
+          history: data.history,
+          generatedAnswer: data.generated_answer,
+          sourceText: data.dossier,
+          cvInfo,
+        });
+      } else {
+        addSystemMessage({ text: data.message, notFound: true, history: data.history, cvInfo });
+      }
+    } catch (e) {
+      addSystemMessage({ text: 'Could not reach the server for the CV request. Is the cv service running (docker compose --profile cv up)?', notFound: true });
+    } finally {
+      photoBtn.disabled = false;
+      askBtn.disabled = false;
+      photoBtn.innerHTML = '&#128247; Photo';
     }
   }
 
