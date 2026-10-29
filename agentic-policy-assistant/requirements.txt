@@ -1,0 +1,9 @@
+langchain-core>=1.0
+langchain-community>=0.4
+langchain-openai>=1.0
+langgraph>=1.0
+langgraph-checkpoint-sqlite>=3.0
+faiss-cpu>=1.8
+numpy>=1.26
+pydantic>=2.6
+pytest>=8.0
