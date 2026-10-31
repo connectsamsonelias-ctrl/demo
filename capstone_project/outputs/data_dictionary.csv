@@ -1,0 +1,47 @@
+column,dtype,feature_group,source,n_unique,description
+customer_id,str,Customer profile,original,250,Customer identifier
+age,int64,Customer profile,original,43,Customer age (years)
+gender,str,Customer profile,original,2,Customer gender
+city_tier,str,Customer profile,original,3,City tier (Tier-1/2/3)
+state,str,Customer profile,original,5,Indian state
+income_band,str,Customer profile,original,3,Income band (Low/Medium/High)
+occupation,str,Customer profile,original,5,Occupation
+membership_level,str,Customer profile,original,4,Loyalty tier (Bronze/Silver/Gold/Platinum)
+days_since_last_purchase,int64,Customer history,original,110,Recency in days
+avg_order_value,float64,Customer history,original,1491,Historic average order value (Rs.)
+total_orders,int64,Customer history,original,19,Historic order count
+preferred_channel,str,Customer history,original,3,App / Web / Store
+product_id,str,Product profile,original,300,Product identifier
+category,str,Product profile,original,3,Shoes / Apparel / Accessories
+sub_category,str,Product profile,original,12,Product sub-type
+brand,str,Product profile,original,14,Brand
+base_price,float64,Commercial data,original,1424,List price (Rs.)
+discount_percent,int64,Commercial data,original,8,Discount (%)
+final_price,float64,Commercial data,original,1430,Price after discount (Rs.)
+avg_product_rating,float64,Commercial data,original,25,Average product rating (1-5)
+stock_level,int64,Commercial data,original,196,Units in stock
+color,str,Product profile,original,10,Color
+size,str,Product profile,original,5,Size (S/M/L/XL; 'NA' = missing)
+material,str,Product profile,original,7,Material
+season,str,Product profile,original,4,Season
+is_returnable,int64,Product profile,original,2,1 if product is returnable
+purchase_flag,int64,Interaction data,original,2,1 if the interaction ended in purchase (TARGET)
+quantity,int64,Interaction data,original,3,Units in interaction
+payment_mode,str,Interaction data,original,5,Payment method
+delivery_type,str,Interaction data,original,2,Standard / Express
+time_on_page,float64,Interaction data,original,1128,Seconds on product page
+added_to_cart,int64,Interaction data,original,2,1 if added to cart
+wishlist_flag,int64,Interaction data,original,2,1 if wishlisted
+returned_flag,int64,Post-purchase,original,2,1 if returned
+rating_given,int64,Post-purchase,original,4,Rating given by customer (2-5)
+review_sentiment_label,str,GenAI enrichment,engineered,3,"Derived from rating_given (2=negative, 3=neutral, 4-5=positive)"
+product_title,str,GenAI enrichment,engineered,746,Template: brand + color + sub_category + material + category
+product_description,str,GenAI enrichment,engineered,1241,"Template sentence from color, sub_category, brand, material, use case, category"
+customer_review_text,str,GenAI enrichment,engineered,28,Synthetic review text chosen to match the sentiment label
+customer_query,str,GenAI enrichment,engineered,1498,Synthetic shopper query: color + sub_category + use case + budget (final_price + ~Rs.1000)
+policy_doc_id,str,GenAI enrichment,engineered,5,Policy id from retail_policies.json linked to the row
+policy_text_snippet,str,GenAI enrichment,engineered,5,Text of that policy (data/policies/retail_policies.json)
+image_path,str,GenAI enrichment,engineered,300,Placeholder path images/<product_id>.jpg (optional multimodal)
+recommended_use_case,str,GenAI enrichment,engineered,7,"Synthetic intended use (Travel, Daily Wear, Office, ...)"
+style_tags,str,GenAI enrichment,engineered,162,"Comma-joined color, material, use case"
+occasion_tags,str,GenAI enrichment,engineered,7,"Same as recommended_use_case, for semantic search"
