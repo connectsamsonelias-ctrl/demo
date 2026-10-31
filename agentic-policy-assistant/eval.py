@@ -22,16 +22,18 @@ import argparse
 import csv
 import json
 import logging
+import re
 import time
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
 
 from agent import build_agent
-from critic import rule_critique
-from graph import build_graph, run_graph
-from memory import SemanticMemory
 from models import DOC_ID_RE, QUOTE_RE, Settings, get_settings
+from tools import get_corpus
+
+# graph.py and memory.py (Part 2) are imported inside run_eval_v2, so this file
+# already works in Part 1 before those files exist.
 
 QUERIES = [
     {"id": "Q1", "q": "What is our remote work limit? Cite and quote.",
@@ -64,10 +66,17 @@ def setup_logging(settings: Settings, tag: str) -> Path:
     return path
 
 
+def _norm(text: str) -> str:
+    return re.sub(r"\s+", " ", text).strip().lower()
+
+
 def score_row(item: dict, answer: str, iterations: int, max_iter: int, stop_ok: bool = True) -> dict:
     cited = DOC_ID_RE.findall(answer)
-    crit = rule_critique(item["q"], answer)
-    has_quote = bool(QUOTE_RE.findall(answer)) and not any(i.startswith("C3") for i in crit.issues)
+    corpus = get_corpus()
+    cited_text = _norm(" ".join(corpus[d]["text"] for d in set(cited) if d in corpus))
+    quotes = QUOTE_RE.findall(answer)
+    # every quote must appear verbatim in a cited policy
+    has_quote = bool(quotes) and all(_norm(q) in cited_text for q in quotes)
     kw_ok = all(k.lower() in answer.lower() for k in item["keywords"])
     within = iterations <= max_iter and stop_ok
     passed = bool(cited) and item["expect_doc"] in cited and has_quote and kw_ok and within
@@ -96,6 +105,8 @@ def run_eval_v1(settings: Optional[Settings] = None, verbose: bool = False) -> L
 def run_eval_v2(settings: Optional[Settings] = None, reset_memory: bool = True,
                 verbose: bool = False, use_sqlite: bool = False, tag: str = "eval_v2") -> List[dict]:
     """Full graph (Part 2). reset_memory=True -> cold run; False -> warm run."""
+    from graph import build_graph, run_graph
+    from memory import SemanticMemory
     s = settings or get_settings()
     log_path = setup_logging(s, tag)
     mem = SemanticMemory(s)
