@@ -1,0 +1,21 @@
+metric,value
+backend,offline
+n_queries,16
+pass_rate,1.0
+route_accuracy,1.0
+check_pass_rate,1.0
+citation_validity,1.0
+grounded_rate,1.0
+avg_latency_s,0.002
+hybrid_precision_at_5,0.9907
+semantic_precision_at_5,0.74
+hybrid_mrr,0.9967
+semantic_mrr,0.7959
+purchase_flag_best_model,Random Forest
+purchase_flag_test_roc_auc,0.6734
+purchase_flag_test_f1,0.6495
+returned_flag_best_model,Random Forest
+returned_flag_test_roc_auc,0.6111
+returned_flag_test_f1,0.4815
+regression_passed,True
+runtime_s,1.0

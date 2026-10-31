@@ -1,0 +1,100 @@
+{
+  "query": "Need a blue backpack for travel under Rs 3000",
+  "route": [
+    "product_search"
+  ],
+  "answer": "Top 3 matches from the catalogue for: 'Need a blue backpack for travel under Rs 3000'. Ranked by semantic similarity, filters and rating.\n1. Titan Blue Backpack Fabric Accessorie [P1048-5] - Rs. 1992: Backpack by Titan in Blue; Rs. 1992 is within the Rs. 3000 budget; rated 4.2/5; tagged for Travel.\n2. Titan Blue Backpack Leather Accessorie [P1054-3] - Rs. 1135: Backpack by Titan in Blue; Rs. 1135 is within the Rs. 3000 budget; rated 3.3/5; tagged for Travel.\n3. Skybags Blue Backpack Fabric Accessorie [P1241-3] - Rs. 761: Backpack by Skybags in Blue; Rs. 761 is within the Rs. 3000 budget; rated 3.6/5; tagged for Travel.",
+  "citations": [
+    "P1048-5",
+    "P1054-3",
+    "P1241-3"
+  ],
+  "trace": [
+    {
+      "stage": "received",
+      "query": "Need a blue backpack for travel under Rs 3000"
+    },
+    {
+      "stage": "guardrail",
+      "result": "passed"
+    },
+    {
+      "stage": "rule_scores",
+      "scores": {
+        "policy_qa": 0,
+        "product_search": 6,
+        "analytics": 0,
+        "review_summary": 0,
+        "calculator": 0
+      },
+      "fired": {
+        "product_search": [
+          "\\bneed (a|an|some)\\b",
+          "\\b(under|below|less than|within|budget)\\s*(₹|rs\\.?|inr)?\\s*\\d",
+          "\\b(shoes?|sneakers?|trainers?|shirts?|t-?shirts?|jeans|jackets?|backpacks?|bags?|caps?|watch(es)?|wallets?|footwear|apparel|accessor(y|ies))\\b",
+          "\\b(black|white|blue|grey|gray|brown|red|beige|navy|green|olive)\\b"
+        ]
+      }
+    },
+    {
+      "stage": "route",
+      "router": "rules",
+      "tools": [
+        "product_search"
+      ],
+      "reason": "highest rule score (product_search=6)"
+    },
+    {
+      "stage": "tool",
+      "tool": "product_search",
+      "citations": [
+        "P1048-5",
+        "P1054-3",
+        "P1241-3"
+      ],
+      "constraints": {
+        "max_price": 3000.0,
+        "sub_category": "Backpack",
+        "color": "Blue",
+        "occasion": "Travel"
+      },
+      "relaxed": [],
+      "status": "ok",
+      "retrieved": [
+        [
+          "P1048-5",
+          0.3923
+        ],
+        [
+          "P1054-3",
+          0.4064
+        ],
+        [
+          "P1241-3",
+          0.3933
+        ],
+        [
+          "P1156-1",
+          0.3784
+        ],
+        [
+          "P1016-2",
+          0.3889
+        ]
+      ],
+      "dropped_ids": [],
+      "llm": {
+        "backend": "offline",
+        "model": "offline-template",
+        "used_fallback": true,
+        "error": null
+      }
+    },
+    {
+      "stage": "answer",
+      "n_citations": 3
+    }
+  ],
+  "backend": "offline",
+  "latency_s": 0.005
+}

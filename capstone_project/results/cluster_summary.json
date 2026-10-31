@@ -1,0 +1,16 @@
+{
+  "k": 4,
+  "features": [
+    "avg_purchase_discount",
+    "deep_discount_share",
+    "avg_purchase_price",
+    "conversion_rate"
+  ],
+  "silhouette": 0.283,
+  "ari_vs_ward": 0.494,
+  "pca_explained_variance": [
+    0.485,
+    0.252
+  ],
+  "most_price_sensitive": "Deal Seekers (price-sensitive)"
+}

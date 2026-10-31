@@ -1,0 +1,7 @@
+{
+  "route_accuracy": 1.0,
+  "check_pass_rate": 1.0,
+  "citation_validity": 1.0,
+  "grounded_rate": 1.0,
+  "hybrid_precision_at_5": 0.9907
+}

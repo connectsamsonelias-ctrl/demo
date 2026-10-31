@@ -1,0 +1,6 @@
+metric,current,threshold,baseline,meets_threshold,no_regression,passed
+route_accuracy,1.0,0.9,,True,True,True
+check_pass_rate,1.0,0.85,,True,True,True
+citation_validity,1.0,1.0,,True,True,True
+grounded_rate,1.0,1.0,,True,True,True
+hybrid_precision_at_5,0.9907,0.8,,True,True,True

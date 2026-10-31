@@ -1,0 +1,301 @@
+query,mode,precision_at_k,hit_at_k,mrr
+Need a blue watch for sports under Rs. 5001,semantic only,1.0,1.0,1.0
+Need a blue watch for sports under Rs. 5001,hybrid (filters + rerank),1.0,1.0,1.0
+Need a black formal for sports under Rs. 3512,semantic only,1.0,1.0,1.0
+Need a black formal for sports under Rs. 3512,hybrid (filters + rerank),1.0,1.0,1.0
+Need a blue casual for travel under Rs. 1474,semantic only,0.4,1.0,1.0
+Need a blue casual for travel under Rs. 1474,hybrid (filters + rerank),1.0,1.0,1.0
+Need a black jeans for travel under Rs. 5213,semantic only,0.8,1.0,1.0
+Need a black jeans for travel under Rs. 5213,hybrid (filters + rerank),1.0,1.0,1.0
+Need a grey backpack for daily use under Rs. 2483,semantic only,0.6,1.0,1.0
+Need a grey backpack for daily use under Rs. 2483,hybrid (filters + rerank),1.0,1.0,1.0
+Need a blue watch for travel under Rs. 2934,semantic only,0.6,1.0,0.5
+Need a blue watch for travel under Rs. 2934,hybrid (filters + rerank),1.0,1.0,1.0
+Need a olive shirt for casual under Rs. 2734,semantic only,0.6,1.0,1.0
+Need a olive shirt for casual under Rs. 2734,hybrid (filters + rerank),1.0,1.0,1.0
+Need a red sneakers for sports under Rs. 3436,semantic only,0.8,1.0,1.0
+Need a red sneakers for sports under Rs. 3436,hybrid (filters + rerank),1.0,1.0,1.0
+Need a green watch for travel under Rs. 4407,semantic only,1.0,1.0,1.0
+Need a green watch for travel under Rs. 4407,hybrid (filters + rerank),1.0,1.0,1.0
+Need a navy jacket for office under Rs. 3256,semantic only,0.6,1.0,1.0
+Need a navy jacket for office under Rs. 3256,hybrid (filters + rerank),1.0,1.0,1.0
+Need a blue wallet for office under Rs. 1312,semantic only,0.2,1.0,0.2
+Need a blue wallet for office under Rs. 1312,hybrid (filters + rerank),1.0,1.0,1.0
+Need a green wallet for office under Rs. 4951,semantic only,0.8,1.0,1.0
+Need a green wallet for office under Rs. 4951,hybrid (filters + rerank),1.0,1.0,1.0
+Need a black watch for office under Rs. 4230,semantic only,0.8,1.0,0.5
+Need a black watch for office under Rs. 4230,hybrid (filters + rerank),1.0,1.0,1.0
+Need a olive jeans for winter under Rs. 4439,semantic only,1.0,1.0,1.0
+Need a olive jeans for winter under Rs. 4439,hybrid (filters + rerank),1.0,1.0,1.0
+Need a white formal for office under Rs. 2487,semantic only,0.8,1.0,1.0
+Need a white formal for office under Rs. 2487,hybrid (filters + rerank),1.0,1.0,1.0
+Need a white formal for travel under Rs. 3095,semantic only,1.0,1.0,1.0
+Need a white formal for travel under Rs. 3095,hybrid (filters + rerank),1.0,1.0,1.0
+Need a brown cap for daily use under Rs. 3346,semantic only,0.6,1.0,1.0
+Need a brown cap for daily use under Rs. 3346,hybrid (filters + rerank),1.0,1.0,1.0
+Need a green cap for sports under Rs. 3249,semantic only,0.6,1.0,1.0
+Need a green cap for sports under Rs. 3249,hybrid (filters + rerank),1.0,1.0,1.0
+Need a blue formal for travel under Rs. 1773,semantic only,0.6,1.0,0.3333333333333333
+Need a blue formal for travel under Rs. 1773,hybrid (filters + rerank),1.0,1.0,1.0
+Need a beige tshirt for casual under Rs. 4205,semantic only,1.0,1.0,1.0
+Need a beige tshirt for casual under Rs. 4205,hybrid (filters + rerank),1.0,1.0,1.0
+Need a red running for sports under Rs. 3111,semantic only,0.8,1.0,0.5
+Need a red running for sports under Rs. 3111,hybrid (filters + rerank),1.0,1.0,1.0
+Need a white running for sports under Rs. 3070,semantic only,0.6,1.0,0.5
+Need a white running for sports under Rs. 3070,hybrid (filters + rerank),1.0,1.0,1.0
+Need a beige tshirt for office under Rs. 4155,semantic only,0.8,1.0,0.5
+Need a beige tshirt for office under Rs. 4155,hybrid (filters + rerank),1.0,1.0,1.0
+Need a grey backpack for daily use under Rs. 2856,semantic only,0.8,1.0,1.0
+Need a grey backpack for daily use under Rs. 2856,hybrid (filters + rerank),1.0,1.0,1.0
+Need a navy tshirt for travel under Rs. 3087,semantic only,0.6,1.0,0.3333333333333333
+Need a navy tshirt for travel under Rs. 3087,hybrid (filters + rerank),1.0,1.0,1.0
+Need a white formal for sports under Rs. 1513,semantic only,0.6,1.0,0.3333333333333333
+Need a white formal for sports under Rs. 1513,hybrid (filters + rerank),1.0,1.0,1.0
+Need a black cap for travel under Rs. 1399,semantic only,0.2,1.0,1.0
+Need a black cap for travel under Rs. 1399,hybrid (filters + rerank),1.0,1.0,1.0
+Need a beige shirt for winter under Rs. 5371,semantic only,0.8,1.0,1.0
+Need a beige shirt for winter under Rs. 5371,hybrid (filters + rerank),1.0,1.0,1.0
+Need a beige tshirt for winter under Rs. 4057,semantic only,1.0,1.0,1.0
+Need a beige tshirt for winter under Rs. 4057,hybrid (filters + rerank),1.0,1.0,1.0
+Need a white casual for sports under Rs. 3745,semantic only,0.8,1.0,0.5
+Need a white casual for sports under Rs. 3745,hybrid (filters + rerank),0.8,1.0,0.5
+Need a white shirt for winter under Rs. 3700,semantic only,0.8,1.0,0.5
+Need a white shirt for winter under Rs. 3700,hybrid (filters + rerank),1.0,1.0,1.0
+Need a blue cap for sports under Rs. 2676,semantic only,0.6,1.0,0.5
+Need a blue cap for sports under Rs. 2676,hybrid (filters + rerank),1.0,1.0,1.0
+Need a navy jeans for office under Rs. 4671,semantic only,0.8,1.0,0.5
+Need a navy jeans for office under Rs. 4671,hybrid (filters + rerank),1.0,1.0,1.0
+Need a black watch for office under Rs. 4107,semantic only,0.8,1.0,0.5
+Need a black watch for office under Rs. 4107,hybrid (filters + rerank),1.0,1.0,1.0
+Need a beige jacket for winter under Rs. 2561,semantic only,1.0,1.0,1.0
+Need a beige jacket for winter under Rs. 2561,hybrid (filters + rerank),1.0,1.0,1.0
+Need a blue running for travel under Rs. 2699,semantic only,0.2,1.0,0.25
+Need a blue running for travel under Rs. 2699,hybrid (filters + rerank),1.0,1.0,1.0
+Need a green wallet for office under Rs. 2796,semantic only,0.6,1.0,0.5
+Need a green wallet for office under Rs. 2796,hybrid (filters + rerank),1.0,1.0,1.0
+Need a black watch for daily use under Rs. 3298,semantic only,1.0,1.0,1.0
+Need a black watch for daily use under Rs. 3298,hybrid (filters + rerank),1.0,1.0,1.0
+Need a white jacket for winter under Rs. 4332,semantic only,1.0,1.0,1.0
+Need a white jacket for winter under Rs. 4332,hybrid (filters + rerank),1.0,1.0,1.0
+Need a brown watch for sports under Rs. 5088,semantic only,1.0,1.0,1.0
+Need a brown watch for sports under Rs. 5088,hybrid (filters + rerank),1.0,1.0,1.0
+Need a red formal for sports under Rs. 3759,semantic only,1.0,1.0,1.0
+Need a red formal for sports under Rs. 3759,hybrid (filters + rerank),1.0,1.0,1.0
+Need a green watch for office under Rs. 1788,semantic only,0.2,1.0,0.2
+Need a green watch for office under Rs. 1788,hybrid (filters + rerank),1.0,1.0,1.0
+Need a black sneakers for office under Rs. 4313,semantic only,0.8,1.0,1.0
+Need a black sneakers for office under Rs. 4313,hybrid (filters + rerank),1.0,1.0,1.0
+Need a beige jacket for office under Rs. 1499,semantic only,0.6,1.0,1.0
+Need a beige jacket for office under Rs. 1499,hybrid (filters + rerank),1.0,1.0,1.0
+Need a beige tshirt for casual under Rs. 4131,semantic only,0.8,1.0,0.5
+Need a beige tshirt for casual under Rs. 4131,hybrid (filters + rerank),1.0,1.0,1.0
+Need a beige jeans for casual under Rs. 2398,semantic only,0.4,1.0,0.5
+Need a beige jeans for casual under Rs. 2398,hybrid (filters + rerank),1.0,1.0,1.0
+Need a blue casual for office under Rs. 2565,semantic only,0.6,1.0,0.5
+Need a blue casual for office under Rs. 2565,hybrid (filters + rerank),1.0,1.0,1.0
+Need a grey sneakers for travel under Rs. 3190,semantic only,0.6,1.0,0.5
+Need a grey sneakers for travel under Rs. 3190,hybrid (filters + rerank),1.0,1.0,1.0
+Need a red running for travel under Rs. 5131,semantic only,1.0,1.0,1.0
+Need a red running for travel under Rs. 5131,hybrid (filters + rerank),1.0,1.0,1.0
+Need a black sneakers for daily wear under Rs. 2291,semantic only,0.4,1.0,0.5
+Need a black sneakers for daily wear under Rs. 2291,hybrid (filters + rerank),1.0,1.0,1.0
+Need a black formal for daily wear under Rs. 6752,semantic only,1.0,1.0,1.0
+Need a black formal for daily wear under Rs. 6752,hybrid (filters + rerank),1.0,1.0,1.0
+Need a green watch for daily use under Rs. 2673,semantic only,0.8,1.0,0.5
+Need a green watch for daily use under Rs. 2673,hybrid (filters + rerank),1.0,1.0,1.0
+Need a grey running for travel under Rs. 2888,semantic only,0.8,1.0,1.0
+Need a grey running for travel under Rs. 2888,hybrid (filters + rerank),1.0,1.0,1.0
+Need a beige jeans for travel under Rs. 5208,semantic only,0.6,1.0,0.5
+Need a beige jeans for travel under Rs. 5208,hybrid (filters + rerank),1.0,1.0,1.0
+Need a olive jacket for office under Rs. 3502,semantic only,0.8,1.0,0.5
+Need a olive jacket for office under Rs. 3502,hybrid (filters + rerank),1.0,1.0,1.0
+Need a grey watch for office under Rs. 3583,semantic only,1.0,1.0,1.0
+Need a grey watch for office under Rs. 3583,hybrid (filters + rerank),1.0,1.0,1.0
+Need a grey watch for office under Rs. 3181,semantic only,0.8,1.0,0.5
+Need a grey watch for office under Rs. 3181,hybrid (filters + rerank),1.0,1.0,1.0
+Need a black jacket for office under Rs. 1299,semantic only,0.4,1.0,1.0
+Need a black jacket for office under Rs. 1299,hybrid (filters + rerank),0.6,1.0,1.0
+Need a blue backpack for office under Rs. 2785,semantic only,0.6,1.0,0.5
+Need a blue backpack for office under Rs. 2785,hybrid (filters + rerank),1.0,1.0,1.0
+Need a black jeans for office under Rs. 3670,semantic only,0.6,1.0,1.0
+Need a black jeans for office under Rs. 3670,hybrid (filters + rerank),1.0,1.0,1.0
+Need a black backpack for daily use under Rs. 7128,semantic only,0.6,1.0,1.0
+Need a black backpack for daily use under Rs. 7128,hybrid (filters + rerank),1.0,1.0,1.0
+Need a black wallet for sports under Rs. 2206,semantic only,0.4,1.0,1.0
+Need a black wallet for sports under Rs. 2206,hybrid (filters + rerank),1.0,1.0,1.0
+Need a white jacket for casual under Rs. 3085,semantic only,0.4,1.0,0.3333333333333333
+Need a white jacket for casual under Rs. 3085,hybrid (filters + rerank),1.0,1.0,1.0
+Need a green backpack for sports under Rs. 4105,semantic only,1.0,1.0,1.0
+Need a green backpack for sports under Rs. 4105,hybrid (filters + rerank),1.0,1.0,1.0
+Need a grey cap for daily use under Rs. 4966,semantic only,1.0,1.0,1.0
+Need a grey cap for daily use under Rs. 4966,hybrid (filters + rerank),1.0,1.0,1.0
+Need a navy jacket for winter under Rs. 5095,semantic only,1.0,1.0,1.0
+Need a navy jacket for winter under Rs. 5095,hybrid (filters + rerank),1.0,1.0,1.0
+Need a olive shirt for travel under Rs. 5163,semantic only,1.0,1.0,1.0
+Need a olive shirt for travel under Rs. 5163,hybrid (filters + rerank),1.0,1.0,1.0
+Need a blue sneakers for travel under Rs. 2445,semantic only,0.4,1.0,0.5
+Need a blue sneakers for travel under Rs. 2445,hybrid (filters + rerank),1.0,1.0,1.0
+Need a white casual for daily wear under Rs. 2611,semantic only,0.6,1.0,1.0
+Need a white casual for daily wear under Rs. 2611,hybrid (filters + rerank),0.6,1.0,1.0
+Need a beige tshirt for winter under Rs. 4670,semantic only,0.8,1.0,0.5
+Need a beige tshirt for winter under Rs. 4670,hybrid (filters + rerank),1.0,1.0,1.0
+Need a white shirt for winter under Rs. 4378,semantic only,1.0,1.0,1.0
+Need a white shirt for winter under Rs. 4378,hybrid (filters + rerank),1.0,1.0,1.0
+Need a green watch for sports under Rs. 2898,semantic only,0.4,1.0,0.3333333333333333
+Need a green watch for sports under Rs. 2898,hybrid (filters + rerank),1.0,1.0,1.0
+Need a black jeans for winter under Rs. 1872,semantic only,0.4,1.0,0.3333333333333333
+Need a black jeans for winter under Rs. 1872,hybrid (filters + rerank),1.0,1.0,1.0
+Need a green backpack for sports under Rs. 3828,semantic only,1.0,1.0,1.0
+Need a green backpack for sports under Rs. 3828,hybrid (filters + rerank),1.0,1.0,1.0
+Need a blue casual for sports under Rs. 2397,semantic only,0.6,1.0,0.5
+Need a blue casual for sports under Rs. 2397,hybrid (filters + rerank),1.0,1.0,1.0
+Need a green cap for office under Rs. 2946,semantic only,1.0,1.0,1.0
+Need a green cap for office under Rs. 2946,hybrid (filters + rerank),1.0,1.0,1.0
+Need a blue backpack for travel under Rs. 2135,semantic only,0.4,1.0,0.3333333333333333
+Need a blue backpack for travel under Rs. 2135,hybrid (filters + rerank),1.0,1.0,1.0
+Need a brown wallet for sports under Rs. 2489,semantic only,0.6,1.0,0.3333333333333333
+Need a brown wallet for sports under Rs. 2489,hybrid (filters + rerank),1.0,1.0,1.0
+Need a blue watch for sports under Rs. 2704,semantic only,0.4,1.0,0.5
+Need a blue watch for sports under Rs. 2704,hybrid (filters + rerank),1.0,1.0,1.0
+Need a white sneakers for daily wear under Rs. 3477,semantic only,0.8,1.0,1.0
+Need a white sneakers for daily wear under Rs. 3477,hybrid (filters + rerank),1.0,1.0,1.0
+Need a black sneakers for office under Rs. 2165,semantic only,0.4,1.0,1.0
+Need a black sneakers for office under Rs. 2165,hybrid (filters + rerank),1.0,1.0,1.0
+Need a black jacket for winter under Rs. 2915,semantic only,0.4,1.0,0.5
+Need a black jacket for winter under Rs. 2915,hybrid (filters + rerank),1.0,1.0,1.0
+Need a grey backpack for daily use under Rs. 3383,semantic only,0.8,1.0,0.5
+Need a grey backpack for daily use under Rs. 3383,hybrid (filters + rerank),1.0,1.0,1.0
+Need a beige shirt for office under Rs. 2063,semantic only,0.8,1.0,0.5
+Need a beige shirt for office under Rs. 2063,hybrid (filters + rerank),1.0,1.0,1.0
+Need a grey watch for daily use under Rs. 3232,semantic only,0.8,1.0,1.0
+Need a grey watch for daily use under Rs. 3232,hybrid (filters + rerank),1.0,1.0,1.0
+Need a blue formal for travel under Rs. 4433,semantic only,0.8,1.0,0.5
+Need a blue formal for travel under Rs. 4433,hybrid (filters + rerank),1.0,1.0,1.0
+Need a navy jeans for travel under Rs. 3417,semantic only,0.6,1.0,0.3333333333333333
+Need a navy jeans for travel under Rs. 3417,hybrid (filters + rerank),1.0,1.0,1.0
+Need a blue running for sports under Rs. 2306,semantic only,0.4,1.0,0.3333333333333333
+Need a blue running for sports under Rs. 2306,hybrid (filters + rerank),1.0,1.0,1.0
+Need a white running for travel under Rs. 1837,semantic only,0.2,1.0,1.0
+Need a white running for travel under Rs. 1837,hybrid (filters + rerank),1.0,1.0,1.0
+Need a grey backpack for travel under Rs. 3408,semantic only,0.4,1.0,0.3333333333333333
+Need a grey backpack for travel under Rs. 3408,hybrid (filters + rerank),1.0,1.0,1.0
+Need a blue backpack for sports under Rs. 5352,semantic only,0.8,1.0,1.0
+Need a blue backpack for sports under Rs. 5352,hybrid (filters + rerank),1.0,1.0,1.0
+Need a beige jeans for office under Rs. 1299,semantic only,0.6,1.0,1.0
+Need a beige jeans for office under Rs. 1299,hybrid (filters + rerank),0.8,1.0,1.0
+Need a black sneakers for travel under Rs. 4069,semantic only,1.0,1.0,1.0
+Need a black sneakers for travel under Rs. 4069,hybrid (filters + rerank),1.0,1.0,1.0
+Need a blue watch for office under Rs. 6272,semantic only,1.0,1.0,1.0
+Need a blue watch for office under Rs. 6272,hybrid (filters + rerank),1.0,1.0,1.0
+Need a navy tshirt for winter under Rs. 3362,semantic only,0.6,1.0,1.0
+Need a navy tshirt for winter under Rs. 3362,hybrid (filters + rerank),1.0,1.0,1.0
+Need a blue running for office under Rs. 6959,semantic only,1.0,1.0,1.0
+Need a blue running for office under Rs. 6959,hybrid (filters + rerank),1.0,1.0,1.0
+Need a red formal for travel under Rs. 4065,semantic only,0.8,1.0,1.0
+Need a red formal for travel under Rs. 4065,hybrid (filters + rerank),1.0,1.0,1.0
+Need a olive jeans for office under Rs. 6099,semantic only,1.0,1.0,1.0
+Need a olive jeans for office under Rs. 6099,hybrid (filters + rerank),1.0,1.0,1.0
+Need a beige tshirt for travel under Rs. 3570,semantic only,0.6,1.0,1.0
+Need a beige tshirt for travel under Rs. 3570,hybrid (filters + rerank),1.0,1.0,1.0
+Need a blue wallet for office under Rs. 5882,semantic only,1.0,1.0,1.0
+Need a blue wallet for office under Rs. 5882,hybrid (filters + rerank),1.0,1.0,1.0
+Need a white shirt for travel under Rs. 4736,semantic only,1.0,1.0,1.0
+Need a white shirt for travel under Rs. 4736,hybrid (filters + rerank),1.0,1.0,1.0
+Need a blue cap for office under Rs. 3171,semantic only,1.0,1.0,1.0
+Need a blue cap for office under Rs. 3171,hybrid (filters + rerank),1.0,1.0,1.0
+Need a grey casual for travel under Rs. 4106,semantic only,0.6,1.0,1.0
+Need a grey casual for travel under Rs. 4106,hybrid (filters + rerank),1.0,1.0,1.0
+Need a white jeans for office under Rs. 3845,semantic only,0.8,1.0,1.0
+Need a white jeans for office under Rs. 3845,hybrid (filters + rerank),1.0,1.0,1.0
+Need a white jeans for travel under Rs. 4949,semantic only,1.0,1.0,1.0
+Need a white jeans for travel under Rs. 4949,hybrid (filters + rerank),1.0,1.0,1.0
+Need a beige shirt for office under Rs. 2346,semantic only,0.6,1.0,0.3333333333333333
+Need a beige shirt for office under Rs. 2346,hybrid (filters + rerank),1.0,1.0,1.0
+Need a brown cap for daily use under Rs. 3495,semantic only,0.6,1.0,1.0
+Need a brown cap for daily use under Rs. 3495,hybrid (filters + rerank),1.0,1.0,1.0
+Need a beige jeans for winter under Rs. 3425,semantic only,0.8,1.0,1.0
+Need a beige jeans for winter under Rs. 3425,hybrid (filters + rerank),1.0,1.0,1.0
+Need a olive shirt for travel under Rs. 4165,semantic only,1.0,1.0,1.0
+Need a olive shirt for travel under Rs. 4165,hybrid (filters + rerank),1.0,1.0,1.0
+Need a white running for office under Rs. 5871,semantic only,1.0,1.0,1.0
+Need a white running for office under Rs. 5871,hybrid (filters + rerank),1.0,1.0,1.0
+Need a grey watch for sports under Rs. 3508,semantic only,0.8,1.0,0.5
+Need a grey watch for sports under Rs. 3508,hybrid (filters + rerank),1.0,1.0,1.0
+Need a olive jacket for winter under Rs. 4318,semantic only,0.8,1.0,1.0
+Need a olive jacket for winter under Rs. 4318,hybrid (filters + rerank),1.0,1.0,1.0
+Need a blue sneakers for daily wear under Rs. 3189,semantic only,0.8,1.0,1.0
+Need a blue sneakers for daily wear under Rs. 3189,hybrid (filters + rerank),1.0,1.0,1.0
+Need a green wallet for sports under Rs. 2139,semantic only,0.2,1.0,0.2
+Need a green wallet for sports under Rs. 2139,hybrid (filters + rerank),1.0,1.0,1.0
+Need a olive jeans for office under Rs. 4659,semantic only,0.8,1.0,1.0
+Need a olive jeans for office under Rs. 4659,hybrid (filters + rerank),1.0,1.0,1.0
+Need a red sneakers for office under Rs. 2959,semantic only,0.8,1.0,1.0
+Need a red sneakers for office under Rs. 2959,hybrid (filters + rerank),1.0,1.0,1.0
+Need a navy jeans for casual under Rs. 3670,semantic only,0.6,1.0,0.5
+Need a navy jeans for casual under Rs. 3670,hybrid (filters + rerank),1.0,1.0,1.0
+Need a white sneakers for sports under Rs. 4408,semantic only,1.0,1.0,1.0
+Need a white sneakers for sports under Rs. 4408,hybrid (filters + rerank),1.0,1.0,1.0
+Need a grey sneakers for office under Rs. 5904,semantic only,1.0,1.0,1.0
+Need a grey sneakers for office under Rs. 5904,hybrid (filters + rerank),1.0,1.0,1.0
+Need a black shirt for casual under Rs. 1374,semantic only,0.4,1.0,1.0
+Need a black shirt for casual under Rs. 1374,hybrid (filters + rerank),1.0,1.0,1.0
+Need a blue casual for sports under Rs. 1773,semantic only,0.4,1.0,0.5
+Need a blue casual for sports under Rs. 1773,hybrid (filters + rerank),1.0,1.0,1.0
+Need a black casual for daily wear under Rs. 6867,semantic only,1.0,1.0,1.0
+Need a black casual for daily wear under Rs. 6867,hybrid (filters + rerank),1.0,1.0,1.0
+Need a white casual for office under Rs. 3822,semantic only,0.6,1.0,0.3333333333333333
+Need a white casual for office under Rs. 3822,hybrid (filters + rerank),1.0,1.0,1.0
+Need a black wallet for travel under Rs. 3455,semantic only,1.0,1.0,1.0
+Need a black wallet for travel under Rs. 3455,hybrid (filters + rerank),1.0,1.0,1.0
+Need a black backpack for travel under Rs. 2220,semantic only,0.6,1.0,1.0
+Need a black backpack for travel under Rs. 2220,hybrid (filters + rerank),1.0,1.0,1.0
+Need a green backpack for travel under Rs. 3149,semantic only,0.8,1.0,1.0
+Need a green backpack for travel under Rs. 3149,hybrid (filters + rerank),1.0,1.0,1.0
+Need a navy tshirt for winter under Rs. 3903,semantic only,1.0,1.0,1.0
+Need a navy tshirt for winter under Rs. 3903,hybrid (filters + rerank),1.0,1.0,1.0
+Need a white jeans for travel under Rs. 4578,semantic only,1.0,1.0,1.0
+Need a white jeans for travel under Rs. 4578,hybrid (filters + rerank),1.0,1.0,1.0
+Need a beige jacket for office under Rs. 3005,semantic only,0.8,1.0,1.0
+Need a beige jacket for office under Rs. 3005,hybrid (filters + rerank),1.0,1.0,1.0
+Need a brown backpack for sports under Rs. 3535,semantic only,0.8,1.0,0.5
+Need a brown backpack for sports under Rs. 3535,hybrid (filters + rerank),1.0,1.0,1.0
+Need a white formal for sports under Rs. 2292,semantic only,0.8,1.0,1.0
+Need a white formal for sports under Rs. 2292,hybrid (filters + rerank),1.0,1.0,1.0
+Need a red casual for travel under Rs. 3123,semantic only,0.4,1.0,0.5
+Need a red casual for travel under Rs. 3123,hybrid (filters + rerank),1.0,1.0,1.0
+Need a navy jeans for winter under Rs. 5169,semantic only,1.0,1.0,1.0
+Need a navy jeans for winter under Rs. 5169,hybrid (filters + rerank),1.0,1.0,1.0
+Need a white casual for travel under Rs. 3337,semantic only,1.0,1.0,1.0
+Need a white casual for travel under Rs. 3337,hybrid (filters + rerank),1.0,1.0,1.0
+Need a grey sneakers for daily wear under Rs. 4269,semantic only,1.0,1.0,1.0
+Need a grey sneakers for daily wear under Rs. 4269,hybrid (filters + rerank),1.0,1.0,1.0
+Need a blue running for sports under Rs. 4452,semantic only,0.8,1.0,0.5
+Need a blue running for sports under Rs. 4452,hybrid (filters + rerank),1.0,1.0,1.0
+Need a black running for office under Rs. 2232,semantic only,0.2,1.0,0.2
+Need a black running for office under Rs. 2232,hybrid (filters + rerank),1.0,1.0,1.0
+Need a green watch for sports under Rs. 4242,semantic only,1.0,1.0,1.0
+Need a green watch for sports under Rs. 4242,hybrid (filters + rerank),1.0,1.0,1.0
+Need a blue watch for daily use under Rs. 4124,semantic only,0.6,1.0,1.0
+Need a blue watch for daily use under Rs. 4124,hybrid (filters + rerank),1.0,1.0,1.0
+Need a white sneakers for office under Rs. 3865,semantic only,0.8,1.0,1.0
+Need a white sneakers for office under Rs. 3865,hybrid (filters + rerank),1.0,1.0,1.0
+Need a brown cap for office under Rs. 3793,semantic only,0.8,1.0,1.0
+Need a brown cap for office under Rs. 3793,hybrid (filters + rerank),1.0,1.0,1.0
+Need a black shirt for casual under Rs. 2401,semantic only,0.6,1.0,0.5
+Need a black shirt for casual under Rs. 2401,hybrid (filters + rerank),1.0,1.0,1.0
+Need a brown cap for office under Rs. 4639,semantic only,1.0,1.0,1.0
+Need a brown cap for office under Rs. 4639,hybrid (filters + rerank),1.0,1.0,1.0
+Need a grey backpack for office under Rs. 1374,semantic only,0.6,1.0,1.0
+Need a grey backpack for office under Rs. 1374,hybrid (filters + rerank),1.0,1.0,1.0
+Need a blue cap for office under Rs. 3309,semantic only,1.0,1.0,1.0
+Need a blue cap for office under Rs. 3309,hybrid (filters + rerank),1.0,1.0,1.0
+Need a grey running for daily wear under Rs. 6804,semantic only,1.0,1.0,1.0
+Need a grey running for daily wear under Rs. 6804,hybrid (filters + rerank),1.0,1.0,1.0
+Need a blue formal for daily wear under Rs. 3200,semantic only,0.8,1.0,1.0
+Need a blue formal for daily wear under Rs. 3200,hybrid (filters + rerank),0.8,1.0,1.0
+Need a beige tshirt for office under Rs. 5197,semantic only,1.0,1.0,1.0
+Need a beige tshirt for office under Rs. 5197,hybrid (filters + rerank),1.0,1.0,1.0
+Need a olive jacket for office under Rs. 3969,semantic only,1.0,1.0,1.0
+Need a olive jacket for office under Rs. 3969,hybrid (filters + rerank),1.0,1.0,1.0
+Need a green backpack for daily use under Rs. 2796,semantic only,0.8,1.0,1.0
+Need a green backpack for daily use under Rs. 2796,hybrid (filters + rerank),1.0,1.0,1.0

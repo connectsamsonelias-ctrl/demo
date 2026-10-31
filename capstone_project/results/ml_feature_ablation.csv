@@ -1,0 +1,5 @@
+task,feature_set,cv_roc_auc,cv_roc_auc_std
+purchase_flag,base,0.6286,0.0272
+purchase_flag,base + engineered,0.6253,0.0304
+returned_flag,base,0.6177,0.0458
+returned_flag,base + engineered,0.6353,0.0516
