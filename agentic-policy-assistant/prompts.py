@@ -36,7 +36,8 @@ R5 Recovery: if read_policy returns POLICY_NOT_FOUND, do NOT retry the same doc_
 policy_search with the topic instead, then read the best match, and tell the user the requested id \
 was not found.
 R6 If a memory hint is provided, treat it as a lead, not as evidence: re-read the cited doc_id \
-with read_policy and quote from that output.
+with read_policy and quote from that output. The hint covers only the policy fact - still answer \
+every part of the question (e.g. still call calculator for any arithmetic).
 
 FINAL ANSWER FORMAT
 Answer: <one or two sentences> [doc_id]
