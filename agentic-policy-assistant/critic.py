@@ -19,6 +19,7 @@ Run on its own:
 from __future__ import annotations
 
 import json
+import logging
 import re
 from typing import List, Optional
 
@@ -26,6 +27,7 @@ from models import DOC_ID_RE, QUOTE_RE, CriticResult, Settings, get_settings
 from prompts import CRITIC_PROMPT
 from tools import get_corpus
 
+log = logging.getLogger("policy_assistant.critic")
 NUMBER_RE = re.compile(r"\d+(?:[.,:]\d+)*")
 
 
@@ -81,12 +83,13 @@ def llm_critique(question: str, answer: str, tool_calls: List[dict], settings: S
     evidence = "\n".join(
         f"read_policy({d}): {corpus[d]['text']}" for d in DOC_ID_RE.findall(answer) if d in corpus
     ) or "(none)"
-    llm = ChatOpenAI(model=settings.model_name, temperature=0, seed=settings.seed,
-                     model_kwargs={"response_format": {"type": "json_object"}})
-    raw = llm.invoke(CRITIC_PROMPT.format(question=question, answer=answer, evidence=evidence)).content
+    llm = ChatOpenAI(model=settings.model_name, temperature=0, seed=settings.seed)
     try:
+        raw = llm.bind(response_format={"type": "json_object"}).invoke(
+            CRITIC_PROMPT.format(question=question, answer=answer, evidence=evidence)).content
         return CriticResult(**json.loads(raw))
-    except Exception:  # malformed JSON -> do not block on the LLM critic
+    except Exception as e:  # API error or malformed JSON -> rules decide, never crash the run
+        log.warning("LLM critic skipped: %s", e)
         return CriticResult(valid=True, issues=[])
 
 
