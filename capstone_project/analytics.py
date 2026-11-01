@@ -35,7 +35,7 @@ def segment_insights(query: str = "") -> dict:
               f"price is Rs. {top.avg_purchase_price:.0f}, conversion rate {top.conversion_rate:.0%} and "
               f"return rate {top.return_rate:.0%} (price-sensitivity index {top.price_sensitivity_index:+.2f}).")
     return {"answer": lead + detail, "table": table.round(3).to_dict("records"),
-            "sources": [str(config.SEGMENT_PROFILE_CSV.relative_to(config.ROOT))]}
+            "sources": [config.SEGMENT_PROFILE_CSV.relative_to(config.ROOT).as_posix()]}
 
 
 def purchase_drivers(query: str = "") -> dict:

@@ -114,6 +114,7 @@ def run_checks(case: dict, out: dict, prev_ids: list) -> list:
 
 def citation_valid(out: dict, product_ids: set, policy_ids: set) -> bool:
     for c in out["citations"]:
+        c = c.replace("\\", "/")          # Windows paths use backslashes
         if c.startswith("results/"):
             if not (config.ROOT / c).exists():
                 return False
