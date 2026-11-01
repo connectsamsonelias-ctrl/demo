@@ -6,7 +6,7 @@ price-sensitivity segments) → **RAG** over product listings with FAISS → **p
 
 ## Setup (Windows PowerShell)
 ```powershell
-cd C:\Users\hp\retail_capstone
+cd "C:\Learning\IITM - Gen AI & ML\Capstone Intelligent Retail Decision Assistant"
 py -m venv .venv
 Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned   # once
 .\.venv\Scripts\Activate.ps1
